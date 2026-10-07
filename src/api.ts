@@ -16,6 +16,19 @@ export interface AppState {
   /** What AutoCapture currently sees. */
   activity: Activity | null;
   idle: boolean;
+  /** AutoCapture: whether it's currently watching, and what it has logged since launch. */
+  capture: CaptureStatus;
+}
+
+export interface CaptureStatus {
+  running: boolean;
+  events: number;
+  screenshots: number;
+  /** macOS permissions AutoCapture needs. */
+  screenAccess: boolean;
+  accessibility: boolean;
+  /** Last error from reading the active window, if the most recent check failed. */
+  error: string | null;
 }
 
 export type Action =
@@ -32,7 +45,11 @@ export type Action =
   | { type: 'rename'; id: string; title: string }
   | { type: 'settings'; patch: Partial<Settings> }
   | { type: 'setMode'; mode: Mode }
-  | { type: 'newRun' }
+  | { type: 'endRun' }
+  | { type: 'toggleCapture' }
+  | { type: 'openPermission'; pane: 'screen' | 'accessibility' }
+  | { type: 'openCaptureLog' }
+  | { type: 'relaunch' }
   | { type: 'openDashboard' }
   | { type: 'hideOverlay' };
 

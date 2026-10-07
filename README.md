@@ -10,10 +10,13 @@ best times.
 
 - A floating timer stays on top of every app and every desktop. Drag it anywhere, resize it, and it
   shrinks down to just the clock when you make it small.
-- Paste your notes or open a `.md`/`.txt` file. Bullets, checkboxes, `#` headings and indentation
+- Click **Import** to paste your notes or open a `.md`/`.txt` file. Bullets, checkboxes, `#` headings and indentation
   become tasks and sections.
 - Add a time estimate to any task (`~30m`, `(1h)`, `[45m]` or just `30m`) and watch the delta while
   you work: green while you're under, red once you're over.
+- **▶ Start** starts the clock on the current task, **❚❚ Pause** stops it, and **End run** saves the run so
+  the next task starts a fresh one.
+- Click the mode badge (MANUAL ▾) to see what each mode does and switch.
 - **Split** (`⌘⇧↩`) finishes the current task and starts the next one. Click any task to switch to it.
 - Quick-add from the bottom of the timer or with `⌘⇧N`. Start the line with `!` to put it on top.
   Drag tasks to reprioritize.

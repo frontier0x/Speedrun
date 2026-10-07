@@ -15,11 +15,12 @@ body { background: transparent; overflow: hidden; }
 .small { font-size: 11px; }
 
 header { display: flex; align-items: center; gap: 8px; padding: 8px 8px 4px 10px; min-height: 34px; }
-.mode {
+.mode { white-space: nowrap;
   font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 2px 7px;
   color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+button.icon.text { font-size: 11px; white-space: nowrap; }
 .run-time { font-size: 12px; color: var(--muted); }
 .pace { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tools { display: flex; gap: 0; opacity: 0.55; transition: opacity 0.15s; }
@@ -73,6 +74,14 @@ li.done .check { background: var(--accent); border-color: var(--accent); color: 
   background: var(--bg-solid); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
 }
+.popover.modes { left: 8px; right: auto; width: 260px; display: flex; flex-direction: column; gap: 6px; }
+.mode-option { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 8px 10px; white-space: normal; }
+.mode-option span { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.mode-option.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.notice { margin-top: 8px; padding: 8px 10px; border-radius: 10px; font-size: 12px; line-height: 1.4;
+  background: color-mix(in srgb, var(--behind) 14%, transparent); border: 1px solid color-mix(in srgb, var(--behind) 40%, transparent); }
+.notice .row { margin-top: 6px; flex-wrap: wrap; }
+.notice button { font-size: 11px; padding: 3px 8px; }
 .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 6px 0 5px; }
 .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .swatch { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
@@ -88,8 +97,13 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 /* Shrink gracefully: a small window becomes just the timer. */
 @media (max-height: 230px) { .list, .add { display: none; } }
 @media (max-height: 130px) {
-  header .pace, header .run-time { display: none; }
+  header .pace, header button.icon.text { font-size: 11px; }
+.run-time { display: none; }
   .meta, .bar { display: none; }
   .timer { font-size: clamp(22px, 9vw, 40px); }
 }
 @media (max-height: 95px) { header { display: none; } .current { padding-top: 10px; } }
+header .tools button.icon { padding: 3px 5px; }
+header { gap: 6px; }
+.run-time { flex: none; }
+.pace { min-width: 0; }

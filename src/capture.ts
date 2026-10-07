@@ -16,6 +16,15 @@ export interface CaptureCallbacks {
   /** A new app or tab became the current activity. */
   onActivity(window: WindowSnapshot, since: number): void;
   onIdle(idle: boolean): void;
+  /** Something went wrong reading the window or screen (usually a missing permission); null once it works again. */
+  onError(message: string | null): void;
+}
+
+/** get-windows explains missing permissions on stdout; fall back to the error message. */
+function describe(err: unknown): string {
+  const out = (err as { stdout?: unknown })?.stdout;
+  if (typeof out === 'string' && out.trim()) return out.trim();
+  return err instanceof Error ? err.message : String(err);
 }
 
 /** AutoCapture: watches window/tab switches, takes screenshots on change and every 30s if the screen moved. */
@@ -28,6 +37,9 @@ export class Capture {
   private lastSavedHash: bigint | undefined;
   private lastScreenshotAt = 0;
   private queue = Promise.resolve();
+  private lastError: string | null = null;
+  events = 0;
+  screenshots = 0;
 
   constructor(
     private readonly store: DayStore,
@@ -45,7 +57,8 @@ export class Capture {
       if (this.ticking) return;
       this.ticking = true;
       this.tick()
-        .catch((err) => console.error('[speedrun]', err))
+        .then(() => this.reportError(null))
+        .catch((err) => this.reportError(describe(err)))
         .finally(() => (this.ticking = false));
     }, POLL_MS);
   }
@@ -54,6 +67,7 @@ export class Capture {
     if (!this.timer) return;
     clearInterval(this.timer);
     this.timer = undefined;
+    this.reportError(null);
     if (kind) this.enqueue(() => this.store.append({ ts: new Date().toISOString(), kind }));
   }
 
@@ -62,6 +76,14 @@ export class Capture {
     if (this.idle || !this.running) return;
     this.setIdle(true);
     this.enqueue(() => this.store.append({ ts: new Date().toISOString(), kind: 'idle_start', idleSeconds: 0 }));
+  }
+
+  /** Logs and reports an error once, not on every poll. */
+  private reportError(message: string | null) {
+    if (message === this.lastError) return;
+    this.lastError = message;
+    if (message) console.error('[speedrun] AutoCapture:', message);
+    this.cb.onError(message);
   }
 
   private setIdle(idle: boolean) {
@@ -86,11 +108,13 @@ export class Capture {
           event.unchanged = true;
         } else {
           event.screenshot = await this.store.saveScreenshot(shot.jpeg, new Date(event.ts));
+          this.screenshots++;
           this.lastSavedHash = shot.hash;
         }
       }
     }
     await this.store.append(event);
+    this.events++;
     console.log(`[speedrun] ${event.kind}${event.unchanged ? ' (unchanged)' : ''} ${window?.app ?? ''} ${window?.title ?? ''}`);
   }
 

@@ -24,6 +24,7 @@ let run: Run | null = null;
 let pastRuns: Run[] = [];
 let activity: Activity | null = null;
 let idle = false;
+let captureError: string | null = null;
 
 let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
@@ -38,12 +39,33 @@ const capture = new Capture(dayStore, {
     idle = v;
     broadcast();
   },
+  onError: (message) => {
+    captureError = message;
+    broadcast();
+  },
 });
+
+const PRIVACY_PANES = {
+  screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+  accessibility: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+};
+
+function captureStatus(): AppState['capture'] {
+  const mac = process.platform === 'darwin';
+  return {
+    running: capture.running,
+    events: capture.events,
+    screenshots: capture.screenshots,
+    screenAccess: !mac || systemPreferences.getMediaAccessStatus('screen') === 'granted',
+    accessibility: !mac || systemPreferences.isTrustedAccessibilityClient(false),
+    error: captureError,
+  };
+}
 
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, settings, golds: [...goldSplits(pastRuns)], activity, idle };
+  return { run, settings, golds: [...goldSplits(pastRuns)], activity, idle, capture: captureStatus() };
 }
 
 function broadcast() {
@@ -72,6 +94,15 @@ function ensureRun(): Run {
     pastRuns = [run, ...pastRuns];
   }
   return run;
+}
+
+/** Stops the clock, saves the run as finished and clears it; the next task you add starts a fresh run. */
+async function endRun(now: number) {
+  if (!run) return;
+  pause(run, now);
+  run.endedAt ??= new Date(now).toISOString();
+  await runStore.save(run);
+  run = null;
 }
 
 function applyMode() {
@@ -134,15 +165,23 @@ async function act(a: Action) {
       applyMode();
       persistSettings();
       break;
-    case 'newRun':
-      if (run) {
-        pause(run, now);
-        run.endedAt ??= new Date(now).toISOString();
-        await runStore.save(run);
-      }
-      run = null;
-      ensureRun();
+    case 'endRun':
+      await endRun(now);
       break;
+    case 'toggleCapture':
+      if (capture.running) capture.stop();
+      else capture.start();
+      break;
+    case 'openPermission':
+      void shell.openExternal(PRIVACY_PANES[a.pane]);
+      return;
+    case 'openCaptureLog':
+      void shell.openPath(dayStore.dayDir());
+      return;
+    case 'relaunch':
+      app.relaunch();
+      app.quit();
+      return;
     case 'openDashboard':
       openDashboard();
       return;
@@ -244,12 +283,12 @@ function buildMenu() {
       { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Shift+Space', click: toggleOverlay },
       { label: 'Dashboard', click: openDashboard },
       { type: 'separator' },
-      { label: 'Manual (task list)', type: 'radio', checked: settings.mode === 'manual', click: () => void act({ type: 'setMode', mode: 'manual' }) },
-      { label: 'AutoCapture', type: 'radio', checked: settings.mode === 'auto', click: () => void act({ type: 'setMode', mode: 'auto' }) },
+      { label: 'Manual (task list)', sublabel: 'You list tasks and time them yourself', type: 'radio', checked: settings.mode === 'manual', click: () => void act({ type: 'setMode', mode: 'manual' }) },
+      { label: 'AutoCapture', sublabel: 'Logs your app and tab switches with screenshots', type: 'radio', checked: settings.mode === 'auto', click: () => void act({ type: 'setMode', mode: 'auto' }) },
       { type: 'separator' },
       { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
-      { label: 'Start new run', click: () => void act({ type: 'newRun' }) },
-      { label: "Open today's capture log", click: () => void shell.openPath(dayStore.dayDir()) },
+      { label: 'End run', click: () => void act({ type: 'endRun' }) },
+      { label: "Open today's capture log", click: () => void act({ type: 'openCaptureLog' }) },
       { type: 'separator' },
       { label: 'Quit Speedrun', role: 'quit' },
     ]),

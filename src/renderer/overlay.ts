@@ -69,13 +69,7 @@ function renderCurrent() {
   const run = state.run;
 
   if (state.settings.mode === 'auto') {
-    const a = state.activity;
-    box.append(el('div', 'title' + (a ? '' : ' placeholder'), a ? a.app : state.idle ? 'Idle' : 'Watching…'));
-    const row = el('div', 'timer-row');
-    row.append(el('div', 'timer mono' + (state.idle ? ' paused' : ''), '0:00'));
-    box.append(row);
-    if (a?.title) box.append(el('div', 'meta muted', a.title));
-    box.append(el('div', 'meta muted small', 'AutoCapture is recording app and tab switches. AI task detection is next.'));
+    renderAuto(box);
     return;
   }
 
@@ -83,7 +77,7 @@ function renderCurrent() {
   const next = run?.tasks.find((t) => !t.done && !isSection(run, t));
   const shown = active ?? next;
 
-  const title = el('div', 'title' + (shown ? '' : ' placeholder'), shown ? shown.title : run?.tasks.length ? 'All done. GG.' : 'Add your first task below');
+  const title = el('div', 'title' + (shown ? '' : ' placeholder'), shown ? shown.title : run?.tasks.length ? 'All done. GG.' : 'Add a task below, then press ▶ Start');
   if (shown) {
     title.title = 'Double-click to rename';
     title.addEventListener('dblclick', () => {
@@ -113,16 +107,21 @@ function renderCurrent() {
   const row = el('div', 'timer-row');
   const running = Boolean(active && run?.activeSince !== undefined);
   row.append(el('div', 'timer mono' + (running ? '' : ' paused'), '0:00'));
-  if (shown) {
-    const controls = el('div', 'controls');
-    const play = el('button', '', running ? '❚❚' : '▶');
-    play.title = running ? 'Pause' : 'Start';
+  const controls = el('div', 'controls');
+  row.append(controls);
+  if (!shown) {
+    const start = el('button', 'primary', '▶ Start');
+    start.title = 'Add a task first';
+    start.onclick = () => $('addInput').focus();
+    controls.append(start);
+  } else {
+    const play = el('button', running ? '' : 'primary', running ? '❚❚ Pause' : '▶ Start');
+    play.title = running ? 'Pause the clock' : 'Start the clock on this task';
     play.onclick = () => (active ? api.act({ type: 'togglePause' }) : api.act({ type: 'start', id: shown.id }));
-    const split = el('button', 'primary', '✓ Split');
+    const split = el('button', running ? 'primary' : '', '✓ Split');
     split.title = 'Finish this task and start the next (⌘⇧↩)';
     split.onclick = () => (active ? api.act({ type: 'split' }) : api.act({ type: 'toggleDone', id: shown.id }));
     controls.append(play, split);
-    row.append(controls);
   }
   box.append(row);
 
@@ -139,6 +138,60 @@ function renderCurrent() {
   }
 }
 
+function renderAuto(box: HTMLElement) {
+  const a = state.activity;
+  const c = state.capture;
+  const blocked = c.error || !c.screenAccess || !c.accessibility;
+  const label = !c.running ? 'Paused' : blocked ? 'Not recording' : state.idle ? 'Idle' : a ? a.app : 'Watching…';
+  box.append(el('div', 'title' + (a && c.running && !blocked ? '' : ' placeholder'), label));
+
+  const row = el('div', 'timer-row');
+  row.append(el('div', 'timer mono' + (state.idle || !c.running ? ' paused' : ''), '0:00'));
+  const controls = el('div', 'controls');
+  const toggle = el('button', c.running ? '' : 'primary', c.running ? '❚❚ Pause' : '▶ Start');
+  toggle.title = c.running ? 'Stop watching for now' : 'Start watching your apps and tabs';
+  toggle.onclick = () => void api.act({ type: 'toggleCapture' });
+  controls.append(toggle);
+  row.append(controls);
+  box.append(row);
+
+  if (a?.title && c.running && !blocked) box.append(el('div', 'meta muted', a.title));
+
+  if (c.running && blocked) {
+    const notice = el('div', 'notice');
+    const missing = [!c.screenAccess && 'Screen Recording', !c.accessibility && 'Accessibility'].filter(Boolean).join(' and ');
+    notice.append(
+      el('div', '', missing
+        ? `AutoCapture needs ${missing} permission. Turn it on for Speedrun (or Electron / your terminal app when started with npm start), then restart.`
+        : `AutoCapture can't read your screen: ${c.error}`),
+    );
+    const btns = el('div', 'row');
+    if (!c.screenAccess || c.error?.includes('screen recording')) {
+      const b = el('button', '', 'Screen Recording…');
+      b.onclick = () => void api.act({ type: 'openPermission', pane: 'screen' });
+      btns.append(b);
+    }
+    if (!c.accessibility || c.error?.includes('accessibility')) {
+      const b = el('button', '', 'Accessibility…');
+      b.onclick = () => void api.act({ type: 'openPermission', pane: 'accessibility' });
+      btns.append(b);
+    }
+    const restart = el('button', 'primary', 'Restart');
+    restart.onclick = () => void api.act({ type: 'relaunch' });
+    btns.append(restart);
+    notice.append(btns);
+    box.append(notice);
+    return;
+  }
+
+  const stats = el('div', 'meta muted small');
+  stats.append(el('span', '', `${c.events} events · ${c.screenshots} screenshots since launch`));
+  const log = el('button', 'icon text', 'Open log');
+  log.onclick = () => void api.act({ type: 'openCaptureLog' });
+  stats.append(log);
+  box.append(stats);
+}
+
 // ---------- list ----------
 
 let dragId: string | null = null;
@@ -148,7 +201,7 @@ function renderList() {
   list.replaceChildren();
   const run = state.run;
   if (!run || !run.tasks.length) {
-    list.append(el('li', 'empty', 'Type a task below or import your notes with ⇪'));
+    list.append(el('li', 'empty', state.settings.mode === 'auto' ? 'Switch to Manual to time your own task list' : 'Type a task below or click Import to paste your notes'));
     return;
   }
   // Unfinished first in priority order, finished ones sink to the bottom.
@@ -235,7 +288,7 @@ function tick() {
   const timer = document.querySelector<HTMLElement>('.timer');
 
   if (state.settings.mode === 'auto') {
-    if (timer) timer.textContent = state.activity ? formatDuration(now - state.activity.since) : '0:00';
+    if (timer) timer.textContent = state.activity && state.capture.running ? formatDuration(now - state.activity.since) : '0:00';
   } else if (run) {
     const active = run.tasks.find((t) => t.id === run.activeTaskId) ?? run.tasks.find((t) => !t.done && !isSection(run, t));
     if (active && timer) {
@@ -298,8 +351,9 @@ function render() {
   document.documentElement.style.setProperty('--accent', state.settings.accent);
   golds = new Map(state.golds);
   const mode = $('mode');
-  mode.textContent = state.settings.mode === 'auto' ? '◉ AUTO' : 'MANUAL';
-  mode.title = state.settings.mode === 'auto' ? 'AutoCapture: watches your apps and tabs. Click for Manual.' : 'Manual: your own task list. Click for AutoCapture.';
+  mode.textContent = (state.settings.mode === 'auto' ? '◉ AUTO' : 'MANUAL') + ' ▾';
+  for (const b of document.querySelectorAll<HTMLElement>('.mode-option')) b.classList.toggle('on', b.dataset.mode === state.settings.mode);
+  $('endBtn').hidden = state.settings.mode === 'auto' || !state.run;
   renderCurrent();
   if (!editing) renderList();
   if (!$('settings').hidden) renderSettings();
@@ -307,7 +361,15 @@ function render() {
 }
 
 function wire() {
-  $('mode').onclick = () => void api.act({ type: 'setMode', mode: state.settings.mode === 'auto' ? 'manual' : 'auto' });
+  const modes = $('modes');
+  $('mode').onclick = () => (modes.hidden = !modes.hidden);
+  for (const b of modes.querySelectorAll<HTMLElement>('.mode-option')) {
+    b.onclick = () => {
+      modes.hidden = true;
+      void api.act({ type: 'setMode', mode: b.dataset.mode as 'manual' | 'auto' });
+    };
+  }
+  $('endBtn').onclick = () => void api.act({ type: 'endRun' });
   $('dashBtn').onclick = () => void api.act({ type: 'openDashboard' });
   $('hideBtn').onclick = () => void api.act({ type: 'hideOverlay' });
   $('settingsBtn').onclick = () => {
@@ -346,12 +408,14 @@ function wire() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       $('settings').hidden = true;
+      modes.hidden = true;
       modal.hidden = true;
     }
   });
   document.addEventListener('click', (e) => {
     const p = $('settings');
     if (!p.hidden && !p.contains(e.target as Node) && e.target !== $('settingsBtn')) p.hidden = true;
+    if (!modes.hidden && !modes.contains(e.target as Node) && e.target !== $('mode')) modes.hidden = true;
   });
 }
 

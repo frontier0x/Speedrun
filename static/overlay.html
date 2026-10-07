@@ -10,12 +10,13 @@
 <body>
   <div class="panel">
     <header class="drag">
-      <button class="mode no-drag" id="mode" title="Switch mode">MANUAL</button>
+      <button class="mode no-drag" id="mode" title="What do the modes do?">MANUAL ▾</button>
       <span class="run-time mono" id="runTime">0:00</span>
       <span class="pace muted" id="pace"></span>
       <div class="spacer"></div>
       <div class="no-drag tools">
-        <button class="icon" id="importBtn" title="Import task list">⇪</button>
+        <button class="icon text" id="endBtn" title="Stop the clock and save this run" hidden>End run</button>
+        <button class="icon text" id="importBtn" title="Paste your notes or open a .md/.txt file">Import</button>
         <button class="icon" id="dashBtn" title="Dashboard">▦</button>
         <button class="icon" id="settingsBtn" title="Color and opacity">◐</button>
         <button class="icon" id="hideBtn" title="Hide (⌘⇧Space)">—</button>
@@ -37,6 +38,17 @@
       <input type="range" id="opacity" min="0.4" max="1" step="0.02" />
       <div class="label">Shortcuts</div>
       <div class="muted small">⌘⇧↩ split · ⌘⇧N add task · ⌘⇧Space show/hide</div>
+    </div>
+
+    <div class="popover modes no-drag" id="modes" hidden>
+      <button type="button" class="mode-option" data-mode="manual">
+        <b>Manual</b>
+        <span>You write a task list and time it yourself: ▶ Start, ✓ Split when a task is done. Needs no permissions.</span>
+      </button>
+      <button type="button" class="mode-option" data-mode="auto">
+        <b>AutoCapture</b>
+        <span>Speedrun watches which app and browser tab you're in, logs every switch and takes a screenshot (kept on your Mac). Needs Screen Recording and Accessibility. Turning this into tasks automatically comes later.</span>
+      </button>
     </div>
 
     <div class="modal no-drag" id="importModal" hidden>
