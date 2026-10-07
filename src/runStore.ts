@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DEFAULT_SETTINGS, type Run, type Settings } from './runs.js';
 
-/** Runs live next to the capture logs: runs/YYYY-MM-DD/run-<id>.json. Settings in settings.json. */
+/** Runs live in runs/YYYY-MM-DD/run-<id>.json. Settings in settings.json. */
 export class RunStore {
   constructor(
     private readonly runsRoot: string,
@@ -57,7 +57,9 @@ export class RunStore {
 
   async loadSettings(): Promise<Settings> {
     try {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(await readFile(this.settingsPath, 'utf8')) };
+      // `mode` is from the old AutoCapture mode, replaced by focusTracking.
+      const { mode: _mode, ...saved } = JSON.parse(await readFile(this.settingsPath, 'utf8'));
+      return { ...DEFAULT_SETTINGS, ...saved };
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
