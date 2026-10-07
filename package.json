@@ -1,6 +1,6 @@
 {
   "name": "speedrun",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Speedrun your day: an open-source, local-first tracker that splits your computer time into tasks.",
   "license": "MIT",
   "type": "module",
@@ -8,7 +8,9 @@
   "scripts": {
     "build": "tsc -p .",
     "start": "npm run build && electron .",
-    "test": "npm run build && node --test dist/*.test.js"
+    "test": "npm run build && node --test dist/*.test.js",
+    "dist": "npm run build && electron-builder --mac --publish never",
+    "release": "npm run build && electron-builder --mac --publish always"
   },
   "dependencies": {
     "get-windows": "^9.3.0"
@@ -16,6 +18,66 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "electron": "^44.7.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "electron-builder": "^26.0.0"
+  },
+  "productName": "Speedrun",
+  "author": "Roland",
+  "build": {
+    "appId": "com.frontier0x.speedrun",
+    "productName": "Speedrun",
+    "copyright": "MIT",
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.test.js",
+      "!dist/**/*.map",
+      "static/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/get-windows/**"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "identity": "-",
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "AutoCapture takes screenshots when you switch tasks so it can tell what you worked on. They stay on your Mac.",
+        "NSAppleEventsUsageDescription": "AutoCapture reads the current browser tab's address."
+      }
+    },
+    "dmg": {
+      "title": "Speedrun"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "frontier0x",
+        "repo": "speedrun",
+        "releaseType": "release"
+      }
+    ],
+    "npmRebuild": false
   }
 }

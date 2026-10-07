@@ -4,6 +4,18 @@ Speedrun your day. A local-first, open-source menu-bar app that times your work 
 time a run: tasks are splits, sections roll up their splits, and you race your own estimates and your
 best times.
 
+## Install
+
+1. Download the latest `Speedrun-…-arm64.dmg` (Apple Silicon) or `Speedrun-….dmg` (Intel) from
+   [Releases](https://github.com/frontier0x/speedrun/releases/latest).
+2. Open it and drag **Speedrun** into **Applications**.
+3. The first time, macOS says it can't verify the developer because the app isn't signed with a paid
+   Apple account yet. Right-click Speedrun › **Open**, or go to System Settings › Privacy & Security ›
+   **Open Anyway**. After that it opens normally.
+
+Speedrun shows a ⏱ in the menu bar, a Dock icon and the floating timer. Tick **Open at login** in the
+menu bar menu to have it start with your Mac.
+
 ## Two modes
 
 **Manual:** your own task list.
@@ -45,7 +57,7 @@ your streak.
 | `⌘⇧N` | Add a task |
 | `⌘⇧Space` | Show or hide the timer |
 
-## Run it
+## Run from source
 
 Requires Node 20+ on macOS.
 
@@ -70,11 +82,14 @@ Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
 - `runs/YYYY-MM-DD/events.jsonl` and `shots/`: AutoCapture's log and screenshots
 - `settings.json`: color, opacity, mode and timer position
 
-## Tests
+## Tests and builds
 
 ```sh
-npm test
+npm test       # unit tests
+npm run dist   # builds release/Speedrun-*.dmg locally
 ```
+
+Pushing a tag like `v0.2.0` makes GitHub Actions build the .dmg and publish it as a release.
 
 ## Roadmap
 
