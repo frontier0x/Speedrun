@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Action, Activity, AppState } from './api.js';
-import { Capture } from './capture.js';
+import { Capture, readPermissions, type Permissions } from './capture.js';
 import {
   addTasks, completeActive, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
   parseTaskList, pause, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
@@ -24,6 +24,7 @@ let run: Run | null = null;
 let pastRuns: Run[] = [];
 let activity: Activity | null = null;
 let idle = false;
+let permissions: Permissions = readPermissions();
 
 let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
@@ -38,12 +39,16 @@ const capture = new Capture(dayStore, {
     idle = v;
     broadcast();
   },
+  onPermissions: (p) => {
+    permissions = p;
+    broadcast();
+  },
 });
 
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, settings, golds: [...goldSplits(pastRuns)], activity, idle };
+  return { run, settings, golds: [...goldSplits(pastRuns)], activity, idle, permissions };
 }
 
 function broadcast() {
@@ -145,6 +150,16 @@ async function act(a: Action) {
       break;
     case 'openDashboard':
       openDashboard();
+      return;
+    case 'openPermission':
+      if (a.which === 'accessibility') systemPreferences.isTrustedAccessibilityClient(true); // shows macOS's own prompt
+      void shell.openExternal(
+        `x-apple.systempreferences:com.apple.preference.security?${a.which === 'screen' ? 'Privacy_ScreenCapture' : 'Privacy_Accessibility'}`,
+      );
+      return;
+    case 'relaunch':
+      app.relaunch();
+      app.quit();
       return;
     case 'hideOverlay':
       overlay?.hide();
@@ -279,13 +294,6 @@ app.whenReady().then(async () => {
   buildMenu();
   createOverlay();
   applyMode();
-
-  if (process.platform === 'darwin' && settings.mode === 'auto') {
-    const screenAccess = systemPreferences.getMediaAccessStatus('screen');
-    if (screenAccess !== 'granted') {
-      console.warn(`[speedrun] Screen Recording permission is "${screenAccess}". Allow it in System Settings › Privacy & Security, then restart.`);
-    }
-  }
 
   powerMonitor.on('lock-screen', () => capture.goIdle());
   powerMonitor.on('suspend', () => capture.goIdle());

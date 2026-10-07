@@ -93,3 +93,11 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
   .timer { font-size: clamp(22px, 9vw, 40px); }
 }
 @media (max-height: 95px) { header { display: none; } .current { padding-top: 10px; } }
+
+.notice {
+  margin-top: 8px; padding: 9px 10px; border-radius: 10px; display: flex; flex-direction: column; gap: 6px;
+  background: color-mix(in srgb, #f59e0b 12%, transparent); border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+}
+.notice-title { font-weight: 600; font-size: 12px; }
+.notice .row { flex-wrap: wrap; }
+.notice button { font-size: 11px; padding: 3px 8px; }
