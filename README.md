@@ -1,26 +1,49 @@
 # Speedrun
 
-Speedrun your day. A local-first, open-source menu-bar app that watches what you're doing on your
-computer and splits your time into tasks the way speedrunners split a run.
+Speedrun your day. A local-first, open-source menu-bar app that times your work the way speedrunners
+time a run: tasks are splits, sections roll up their splits, and you race your own estimates and your
+best times.
 
-**Status: step 1 of 4, event-driven capture.** The app logs what you're working on. Nothing is sent
-anywhere yet; the AI referee comes in step 3.
+## Two modes
 
-## What it does today
+**Manual:** your own task list.
 
-- Checks the active app, window title and browser tab URL once a second. That check is cheap and takes
-  no screenshot.
-- Logs an event, with a screenshot, when you **switch apps**, **switch tabs** or the **window title
-  changes**. A change only counts once it has held for 1.5 s, so quickly alt-tabbing through apps
-  doesn't flood the log.
-- Takes a **heartbeat** screenshot every 30 s while you stay in one place. If the screen looks the same
-  as last time (compared with a perceptual hash), nothing is saved, and later nothing is sent to the AI.
-- Detects **idle**, after 2 minutes without input, a screen lock or sleep, and logs when you return.
-- Shows the current app and how long you've been on it in the menu bar, e.g. `⏱ Code 12:04`.
-- **Pause / Resume** from the menu bar.
+- A floating timer stays on top of every app and every desktop. Drag it anywhere, resize it, and it
+  shrinks down to just the clock when you make it small.
+- Paste your notes or open a `.md`/`.txt` file. Bullets, checkboxes, `#` headings and indentation
+  become tasks and sections.
+- Add a time estimate to any task (`~30m`, `(1h)`, `[45m]` or just `30m`) and watch the delta while
+  you work: green while you're under, red once you're over.
+- **Split** (`⌘⇧↩`) finishes the current task and starts the next one. Click any task to switch to it.
+- Quick-add from the bottom of the timer or with `⌘⇧N`. Start the line with `!` to put it on top.
+  Drag tasks to reprioritize.
+- Pick any accent color and adjust the opacity.
+- Gold splits: beat your best time on a task you've done before and it turns gold ★.
+- The header shows total run time and when you'll be done at your estimated pace.
 
-Everything is stored on your Mac in `~/Library/Application Support/speedrun/runs/YYYY-MM-DD/`:
-`events.jsonl` plus a `shots/` folder of ~1280px JPEGs.
+**AutoCapture:** it watches what you do.
+
+- Checks the active app, window title and browser tab URL once a second, which is cheap and takes no
+  screenshot.
+- Logs an event with a screenshot when you switch apps or tabs or the window title changes, once the
+  change has held for 1.5 s.
+- Takes a heartbeat screenshot every 30 s and skips it if the screen hasn't changed (perceptual hash).
+- Detects idle (2 minutes without input, screen lock or sleep).
+- Coming next: an AI referee that turns these events into named splits and nudges you when you drift.
+
+## Dashboard
+
+Open it from the timer (▦) or the menu bar. It shows every previous run with its splits, estimates vs
+actuals, best times and sum of best, plus tracked time over the last 14 days, estimate accuracy and
+your streak.
+
+## Shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `⌘⇧↩` | Split: finish the current task, start the next |
+| `⌘⇧N` | Add a task |
+| `⌘⇧Space` | Show or hide the timer |
 
 ## Run it
 
@@ -31,13 +54,21 @@ npm install
 npm start
 ```
 
-macOS will ask for two permissions. Grant both, then restart with `npm start`:
+AutoCapture needs two macOS permissions. Grant both, then restart with `npm start`:
 
 - **Screen Recording**, for screenshots and window titles.
 - **Accessibility**, to read the current browser tab's URL.
 
-When you run it from a terminal, macOS gives the permission to your terminal app (Terminal, iTerm,
+When you run from a terminal, macOS gives the permission to your terminal app (Terminal, iTerm,
 VS Code…), so that's the entry to switch on under System Settings › Privacy & Security.
+
+## Your data
+
+Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
+
+- `runs/YYYY-MM-DD/run-*.json`: your task runs
+- `runs/YYYY-MM-DD/events.jsonl` and `shots/`: AutoCapture's log and screenshots
+- `settings.json`: color, opacity, mode and timer position
 
 ## Tests
 
@@ -48,10 +79,10 @@ npm test
 ## Roadmap
 
 1. ✅ Event-driven capture
-2. Split tree and timer: run › section › split with rolled-up times and a live overlay
+2. ✅ Manual mode, floating timer, dashboard
 3. AI referee: a pluggable model (Claude Haiku, Gemini or a local Ollama model) that reads each change,
    opens and closes splits, infers tasks and nudges you when you drift
-4. Daily recap: timeline, section and split times, gold splits
+4. Daily recap
 
 ## License
 

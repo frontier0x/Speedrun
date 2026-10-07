@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Speedrun</title>
+  <link rel="stylesheet" href="common.css" />
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <div class="titlebar"></div>
+  <main>
+    <section class="hero">
+      <div>
+        <h1>Your runs</h1>
+        <div class="muted" id="subtitle"></div>
+      </div>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="card-head"><h2>Tracked time, last 14 days</h2></div>
+      <div class="chart" id="chart"></div>
+    </section>
+
+    <section class="split">
+      <div class="card runs">
+        <div class="card-head"><h2>Runs</h2></div>
+        <ol id="runs"></ol>
+      </div>
+      <div class="card detail" id="detail"></div>
+    </section>
+  </main>
+  <div class="tooltip" id="tooltip" hidden></div>
+  <script type="module" src="../dist/renderer/dashboard.js"></script>
+</body>
+</html>
