@@ -1,71 +1,100 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, shell, systemPreferences, Tray } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, shell, Tray } from 'electron';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Action, Activity, AppState } from './api.js';
-import { Capture } from './capture.js';
+import type { Action, AppState, FocusStatus } from './api.js';
+import { classify, emptyTotals, Nudger, sourceKey } from './focus.js';
+import { FrontmostWatcher, type Sample } from './frontmost.js';
 import {
   addTasks, completeActive, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
   parseTaskList, pause, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
 } from './runs.js';
 import { RunStore } from './runStore.js';
-import { DayStore } from './store.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const staticDir = join(here, '..', 'static');
 const preload = join(here, 'preload.cjs');
 
 const runsRoot = join(app.getPath('userData'), 'runs');
-const dayStore = new DayStore(runsRoot);
 const runStore = new RunStore(runsRoot, join(app.getPath('userData'), 'settings.json'));
+
+const OVERLAY_WIDTH = 300;
+/** No input for this long and the time stops counting toward focus. */
+const IDLE_AFTER_S = 120;
+/** Speedrun itself in front (clicking the timer) doesn't count as anything. */
+const OWN_APPS = new Set(['Electron', 'Speedrun', 'speedrun']);
 
 let settings: Settings;
 let run: Run | null = null;
 let pastRuns: Run[] = [];
-let activity: Activity | null = null;
-let idle = false;
-let captureError: string | null = null;
 
 let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
 let dashboard: BrowserWindow | null = null;
 
-const capture = new Capture(dayStore, {
-  onActivity: (w, since) => {
-    activity = { app: w.app, title: w.title, since };
-    broadcast();
-  },
-  onIdle: (v) => {
-    idle = v;
-    broadcast();
-  },
-  onError: (message) => {
-    captureError = message;
-    broadcast();
-  },
-});
+// ---------- focus tracking ----------
 
-const PRIVACY_PANES = {
-  screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
-  accessibility: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
-};
+let focusNow: FocusStatus['current'] = null;
+let browserBlocked: string | null = null;
+let lastSampleAt = 0;
+let samplesSinceSave = 0;
+const nudger = new Nudger();
+const watcher = new FrontmostWatcher(onSample);
 
-function captureStatus(): AppState['capture'] {
-  const mac = process.platform === 'darwin';
-  return {
-    running: capture.running,
-    events: capture.events,
-    screenshots: capture.screenshots,
-    screenAccess: !mac || systemPreferences.getMediaAccessStatus('screen') === 'granted',
-    accessibility: !mac || systemPreferences.isTrustedAccessibilityClient(false),
-    error: captureError,
-  };
+const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
+
+function onSample(s: Sample) {
+  const now = Date.now();
+  const ms = lastSampleAt ? Math.min(now - lastSampleAt, 5000) : 1000;
+  lastSampleAt = now;
+
+  if (s.browserError && /-1743|not authori[sz]ed/i.test(s.browserError)) browserBlocked = s.app;
+  else if (s.url && browserBlocked === s.app) browserBlocked = null;
+
+  const task = activeTask();
+  if (!run || !task || run.activeSince === undefined) {
+    if (focusNow || nudger.current) {
+      focusNow = null;
+      nudger.reset();
+      broadcast();
+    }
+    return;
+  }
+  if (OWN_APPS.has(s.app) || powerMonitor.getSystemIdleTime() >= IDLE_AFTER_S) return;
+
+  const key = sourceKey(s);
+  const kind = classify(s, task.allowed);
+  task.focus ??= emptyTotals();
+  task.focus[kind] += ms;
+  task.sources ??= {};
+  task.sources[key] = (task.sources[key] ?? 0) + ms;
+  focusNow = { key, kind };
+  nudger.observe(kind, key, ms, now);
+  if (++samplesSinceSave >= 10) {
+    samplesSinceSave = 0;
+    persist();
+  }
+  broadcast();
+}
+
+function applyFocusTracking() {
+  if (settings.focusTracking) watcher.start();
+  else {
+    watcher.stop();
+    focusNow = null;
+    nudger.reset();
+  }
 }
 
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, settings, golds: [...goldSplits(pastRuns)], activity, idle, capture: captureStatus() };
+  return {
+    run,
+    settings,
+    golds: [...goldSplits(pastRuns)],
+    focus: { current: focusNow, nudge: nudger.current, browserBlocked },
+  };
 }
 
 function broadcast() {
@@ -90,7 +119,7 @@ function persistSettings() {
 
 function ensureRun(): Run {
   if (!run) {
-    run = newRun(settings.mode);
+    run = newRun('manual');
     pastRuns = [run, ...pastRuns];
   }
   return run;
@@ -103,11 +132,6 @@ async function endRun(now: number) {
   run.endedAt ??= new Date(now).toISOString();
   await runStore.save(run);
   run = null;
-}
-
-function applyMode() {
-  if (settings.mode === 'auto') capture.start();
-  else capture.stop();
 }
 
 async function act(a: Action) {
@@ -128,15 +152,19 @@ async function act(a: Action) {
     }
     case 'start':
       if (run) startTask(run, a.id, now);
+      nudger.reset();
       break;
     case 'toggleDone':
       if (run) toggleDone(run, a.id, now);
+      nudger.reset();
       break;
     case 'split':
       if (run) completeActive(run, now);
+      nudger.reset();
       break;
     case 'togglePause':
       if (run) run.activeSince !== undefined ? pause(run, now) : resume(run, now);
+      nudger.reset();
       break;
     case 'remove':
       if (run) removeTask(run, a.id, now);
@@ -157,30 +185,34 @@ async function act(a: Action) {
     case 'settings':
       settings = { ...settings, ...a.patch };
       if (a.patch.opacity !== undefined) overlay?.setOpacity(settings.opacity);
-      persistSettings();
-      break;
-    case 'setMode':
-      settings = { ...settings, mode: a.mode };
-      if (run) run.mode = a.mode;
-      applyMode();
+      if (a.patch.focusTracking !== undefined) {
+        applyFocusTracking();
+        buildMenu();
+      }
       persistSettings();
       break;
     case 'endRun':
       await endRun(now);
+      nudger.reset();
       break;
-    case 'toggleCapture':
-      if (capture.running) capture.stop();
-      else capture.start();
+    case 'nudge': {
+      const task = activeTask();
+      if (a.answer === 'pause' && run) pause(run, now);
+      if (a.answer === 'allow' && task && nudger.current) {
+        task.allowed = [...new Set([...(task.allowed ?? []), nudger.current.key])];
+        nudger.reset();
+      } else nudger.dismiss(now);
       break;
-    case 'openPermission':
-      void shell.openExternal(PRIVACY_PANES[a.pane]);
+    }
+    case 'openAutomationSettings':
+      void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Automation');
       return;
-    case 'openCaptureLog':
-      void shell.openPath(dayStore.dayDir());
-      return;
-    case 'relaunch':
-      app.relaunch();
-      app.quit();
+    case 'fitHeight':
+      if (overlay && !overlay.isDestroyed()) {
+        const b = overlay.getBounds();
+        const height = Math.max(40, Math.min(640, Math.ceil(a.height)));
+        if (b.height !== height) overlay.setBounds({ ...b, height });
+      }
       return;
     case 'openDashboard':
       openDashboard();
@@ -198,38 +230,40 @@ async function act(a: Action) {
 
 function createOverlay() {
   const area = screen.getPrimaryDisplay().workArea;
-  const b = settings.overlayBounds ?? { width: 320, height: 420, x: area.x + area.width - 340, y: area.y + 20 };
+  const saved = settings.overlayBounds;
   overlay = new BrowserWindow({
-    ...b,
-    minWidth: 220,
-    minHeight: 72,
+    x: saved?.x ?? area.x + area.width - OVERLAY_WIDTH - 16,
+    y: saved?.y ?? area.y + 12,
+    width: OVERLAY_WIDTH,
+    height: 48,
+    // A panel floats over every app, every Space and full-screen windows, like Spotlight.
+    type: 'panel',
     frame: false,
     transparent: true,
-    resizable: true,
-    alwaysOnTop: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
     skipTaskbar: true,
     hasShadow: true,
-    fullscreenable: false,
     show: false,
     webPreferences: { preload, contextIsolation: true, sandbox: true },
   });
-  overlay.setAlwaysOnTop(true, 'floating');
+  overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlay.setOpacity(settings.opacity);
   void overlay.loadFile(join(staticDir, 'overlay.html'));
   overlay.once('ready-to-show', () => overlay?.showInactive());
 
   let boundsTimer: NodeJS.Timeout | undefined;
-  const saveBounds = () => {
+  overlay.on('moved', () => {
     clearTimeout(boundsTimer);
     boundsTimer = setTimeout(() => {
       if (!overlay || overlay.isDestroyed()) return;
       settings = { ...settings, overlayBounds: overlay.getBounds() };
       persistSettings();
     }, 400);
-  };
-  overlay.on('moved', saveBounds);
-  overlay.on('resized', saveBounds);
+  });
   overlay.on('closed', () => (overlay = null));
 }
 
@@ -253,7 +287,7 @@ function openDashboard() {
     minHeight: 520,
     title: 'Speedrun',
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#0d0d12',
+    backgroundColor: '#0a0a0a',
     webPreferences: { preload, contextIsolation: true, sandbox: true },
   });
   void dashboard.loadFile(join(staticDir, 'dashboard.html'));
@@ -266,13 +300,9 @@ function openDashboard() {
 
 function refreshTray() {
   if (!tray) return;
-  if (idle && settings.mode === 'auto') return tray.setTitle('💤 idle');
-  if (settings.mode === 'auto') {
-    const name = (activity?.app ?? '…').slice(0, 18);
-    return tray.setTitle(`◉ ${name} ${activity ? formatDuration(Date.now() - activity.since) : ''}`);
-  }
-  const active = run?.tasks.find((t) => t.id === run?.activeTaskId);
+  const active = activeTask();
   if (!run || !active) return tray.setTitle(run ? `⏱ ${formatDuration(runElapsed(run))}` : '⏱');
+  if (nudger.current) return tray.setTitle(`● ${nudger.current.key}`);
   const icon = run.activeSince !== undefined ? '⏱' : '⏸';
   tray.setTitle(`${icon} ${active.title.slice(0, 22)} ${formatDuration(liveElapsed(run, active))}`);
 }
@@ -283,12 +313,16 @@ function buildMenu() {
       { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Shift+Space', click: toggleOverlay },
       { label: 'Dashboard', click: openDashboard },
       { type: 'separator' },
-      { label: 'Manual (task list)', sublabel: 'You list tasks and time them yourself', type: 'radio', checked: settings.mode === 'manual', click: () => void act({ type: 'setMode', mode: 'manual' }) },
-      { label: 'AutoCapture', sublabel: 'Logs your app and tab switches with screenshots', type: 'radio', checked: settings.mode === 'auto', click: () => void act({ type: 'setMode', mode: 'auto' }) },
+      {
+        label: 'Focus tracking',
+        sublabel: 'Notices long distractions while a task runs',
+        type: 'checkbox',
+        checked: settings.focusTracking,
+        click: () => void act({ type: 'settings', patch: { focusTracking: !settings.focusTracking } }),
+      },
       { type: 'separator' },
       { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
       { label: 'End run', click: () => void act({ type: 'endRun' }) },
-      { label: "Open today's capture log", click: () => void act({ type: 'openCaptureLog' }) },
       { type: 'separator' },
       { label: 'Quit Speedrun', role: 'quit' },
     ]),
@@ -317,17 +351,7 @@ app.whenReady().then(async () => {
   tray = new Tray(nativeImage.createEmpty());
   buildMenu();
   createOverlay();
-  applyMode();
-
-  if (process.platform === 'darwin' && settings.mode === 'auto') {
-    const screenAccess = systemPreferences.getMediaAccessStatus('screen');
-    if (screenAccess !== 'granted') {
-      console.warn(`[speedrun] Screen Recording permission is "${screenAccess}". Allow it in System Settings › Privacy & Security, then restart.`);
-    }
-  }
-
-  powerMonitor.on('lock-screen', () => capture.goIdle());
-  powerMonitor.on('suspend', () => capture.goIdle());
+  applyFocusTracking();
 
   globalShortcut.register('CommandOrControl+Shift+Return', () => void act({ type: 'split' }));
   globalShortcut.register('CommandOrControl+Shift+Space', toggleOverlay);
@@ -343,6 +367,7 @@ app.whenReady().then(async () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  watcher.stop();
   // Bank the running clock so time while the app is closed doesn't count.
   if (run) {
     pause(run);

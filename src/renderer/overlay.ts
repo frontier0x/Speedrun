@@ -1,7 +1,7 @@
 import type { AppState, SpeedrunApi } from '../api.js';
 import {
-  ACCENTS, formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, projectedRemaining, runElapsed,
-  taskKey, totalElapsed, totalEstimate, type Run, type Task,
+  ACCENTS, formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, runElapsed, taskKey, totalElapsed,
+  totalEstimate, type Run, type Task,
 } from '../runs.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
@@ -24,175 +24,110 @@ function depth(run: Run, t: Task): number {
   return d;
 }
 
-/** Delta against estimate, coloured like a speedrun split: green under, red over. */
-function deltaSpan(actual: number, estimate?: number): HTMLElement | null {
-  if (estimate === undefined) return null;
-  const d = actual - estimate;
-  return el('span', 'mono ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true }));
-}
+const minutes = (ms: number) =>
+  ms >= 3_600_000 ? `${Math.floor(ms / 3_600_000)}h ${Math.round((ms % 3_600_000) / 60_000)}m` : ms >= 60_000 ? `${Math.round(ms / 60_000)}m` : `${Math.round(ms / 1000)}s`;
 
-function estimateChip(t: Task, label?: string): HTMLElement {
-  const chip = el('span', 'chip editable', label ?? (t.estimateMs !== undefined ? formatEstimate(t.estimateMs) : '+ est'));
-  chip.title = 'How long do you think this takes? e.g. 25m, 1h30m';
-  chip.addEventListener('click', (e) => {
-    e.stopPropagation();
-    editing = true;
-    const input = el('input');
-    input.value = t.estimateMs !== undefined ? formatEstimate(t.estimateMs).replace(' ', '') : '';
-    input.placeholder = '25m';
-    input.style.width = '70px';
-    input.style.padding = '1px 6px';
-    chip.replaceWith(input);
-    input.focus();
-    let closed = false;
-    const done = (save: boolean) => {
-      if (closed) return;
-      closed = true;
-      editing = false;
-      if (save) void api.act({ type: 'setEstimate', id: t.id, text: input.value });
-      else render();
-    };
-    input.addEventListener('keydown', (k) => {
-      if (k.key === 'Enter') done(true);
-      if (k.key === 'Escape') done(false);
-    });
-    input.addEventListener('blur', () => done(true), { once: true });
-  });
-  return chip;
-}
-
-// ---------- current split ----------
-
-function renderCurrent() {
-  const box = $('current');
-  box.replaceChildren();
+/** The task the bar shows: the running one, or the next one up. */
+function shownTask(): Task | undefined {
   const run = state.run;
-
-  if (state.settings.mode === 'auto') {
-    renderAuto(box);
-    return;
-  }
-
-  const active = run?.tasks.find((t) => t.id === run.activeTaskId);
-  const next = run?.tasks.find((t) => !t.done && !isSection(run, t));
-  const shown = active ?? next;
-
-  const title = el('div', 'title' + (shown ? '' : ' placeholder'), shown ? shown.title : run?.tasks.length ? 'All done. GG.' : 'Add a task below, then press ▶ Start');
-  if (shown) {
-    title.title = 'Double-click to rename';
-    title.addEventListener('dblclick', () => {
-      editing = true;
-      const input = el('input');
-      input.value = shown.title;
-      title.replaceWith(input);
-      input.focus();
-      input.select();
-      let closed = false;
-      const done = (save: boolean) => {
-        if (closed) return;
-        closed = true;
-        editing = false;
-        if (save && input.value.trim()) void api.act({ type: 'rename', id: shown.id, title: input.value });
-        else render();
-      };
-      input.addEventListener('keydown', (k) => {
-        if (k.key === 'Enter') done(true);
-        if (k.key === 'Escape') done(false);
-      });
-      input.addEventListener('blur', () => done(true), { once: true });
-    });
-  }
-  box.append(title);
-
-  const row = el('div', 'timer-row');
-  const running = Boolean(active && run?.activeSince !== undefined);
-  row.append(el('div', 'timer mono' + (running ? '' : ' paused'), '0:00'));
-  const controls = el('div', 'controls');
-  row.append(controls);
-  if (!shown) {
-    const start = el('button', 'primary', '▶ Start');
-    start.title = 'Add a task first';
-    start.onclick = () => $('addInput').focus();
-    controls.append(start);
-  } else {
-    const play = el('button', running ? '' : 'primary', running ? '❚❚ Pause' : '▶ Start');
-    play.title = running ? 'Pause the clock' : 'Start the clock on this task';
-    play.onclick = () => (active ? api.act({ type: 'togglePause' }) : api.act({ type: 'start', id: shown.id }));
-    const split = el('button', running ? 'primary' : '', '✓ Split');
-    split.title = 'Finish this task and start the next (⌘⇧↩)';
-    split.onclick = () => (active ? api.act({ type: 'split' }) : api.act({ type: 'toggleDone', id: shown.id }));
-    controls.append(play, split);
-  }
-  box.append(row);
-
-  if (shown) {
-    const meta = el('div', 'meta');
-    meta.append(estimateChip(shown, shown.estimateMs !== undefined ? 'est ' + formatEstimate(shown.estimateMs) : '+ estimate'));
-    meta.append(el('span', 'delta'));
-    const best = golds.get(taskKey(shown.title));
-    if (best !== undefined) meta.append(el('span', 'chip gold', '★ best ' + formatDuration(best)));
-    box.append(meta);
-    const bar = el('div', 'bar');
-    bar.append(el('div'));
-    box.append(bar);
-  }
+  if (!run) return undefined;
+  return run.tasks.find((t) => t.id === run.activeTaskId) ?? run.tasks.find((t) => !t.done && !isSection(run, t));
 }
 
-function renderAuto(box: HTMLElement) {
-  const a = state.activity;
-  const c = state.capture;
-  const blocked = c.error || !c.screenAccess || !c.accessibility;
-  const label = !c.running ? 'Paused' : blocked ? 'Not recording' : state.idle ? 'Idle' : a ? a.app : 'Watching…';
-  box.append(el('div', 'title' + (a && c.running && !blocked ? '' : ' placeholder'), label));
+const isRunning = () => Boolean(state.run?.activeTaskId && state.run.activeSince !== undefined);
 
-  const row = el('div', 'timer-row');
-  row.append(el('div', 'timer mono' + (state.idle || !c.running ? ' paused' : ''), '0:00'));
-  const controls = el('div', 'controls');
-  const toggle = el('button', c.running ? '' : 'primary', c.running ? '❚❚ Pause' : '▶ Start');
-  toggle.title = c.running ? 'Stop watching for now' : 'Start watching your apps and tabs';
-  toggle.onclick = () => void api.act({ type: 'toggleCapture' });
-  controls.append(toggle);
-  row.append(controls);
-  box.append(row);
-
-  if (a?.title && c.running && !blocked) box.append(el('div', 'meta muted', a.title));
-
-  if (c.running && blocked) {
-    const notice = el('div', 'notice');
-    const missing = [!c.screenAccess && 'Screen Recording', !c.accessibility && 'Accessibility'].filter(Boolean).join(' and ');
-    notice.append(
-      el('div', '', missing
-        ? `AutoCapture needs ${missing} permission. Turn it on for Speedrun (or Electron / your terminal app when started with npm start), then restart.`
-        : `AutoCapture can't read your screen: ${c.error}`),
-    );
-    const btns = el('div', 'row');
-    if (!c.screenAccess || c.error?.includes('screen recording')) {
-      const b = el('button', '', 'Screen Recording…');
-      b.onclick = () => void api.act({ type: 'openPermission', pane: 'screen' });
-      btns.append(b);
-    }
-    if (!c.accessibility || c.error?.includes('accessibility')) {
-      const b = el('button', '', 'Accessibility…');
-      b.onclick = () => void api.act({ type: 'openPermission', pane: 'accessibility' });
-      btns.append(b);
-    }
-    const restart = el('button', 'primary', 'Restart');
-    restart.onclick = () => void api.act({ type: 'relaunch' });
-    btns.append(restart);
-    notice.append(btns);
-    box.append(notice);
-    return;
-  }
-
-  const stats = el('div', 'meta muted small');
-  stats.append(el('span', '', `${c.events} events · ${c.screenshots} screenshots since launch`));
-  const log = el('button', 'icon text', 'Open log');
-  log.onclick = () => void api.act({ type: 'openCaptureLog' });
-  stats.append(log);
-  box.append(stats);
+/** Inline editor that replaces `target` until Enter, Escape or blur. */
+function inlineEdit(target: HTMLElement, value: string, placeholder: string, save: (v: string) => void) {
+  editing = true;
+  const input = el('input');
+  input.value = value;
+  input.placeholder = placeholder;
+  input.style.padding = '1px 6px';
+  input.style.width = target.classList.contains('chip') ? '64px' : '100%';
+  target.replaceWith(input);
+  input.focus();
+  input.select();
+  let closed = false;
+  const done = (ok: boolean) => {
+    if (closed) return;
+    closed = true;
+    editing = false;
+    if (ok) save(input.value);
+    else render();
+  };
+  input.addEventListener('keydown', (k) => {
+    if (k.key === 'Enter') done(true);
+    if (k.key === 'Escape') done(false);
+  });
+  input.addEventListener('blur', () => done(true), { once: true });
 }
 
-// ---------- list ----------
+// ---------- bar ----------
+
+function renderBar() {
+  const shown = shownTask();
+  const running = isRunning();
+  const task = $('task');
+  task.textContent = shown ? shown.title : state.run?.tasks.length ? 'All done. GG.' : 'Add a task to start';
+  task.className = 'task' + (shown ? '' : ' placeholder');
+
+  const play = $('play');
+  play.textContent = running ? '❚❚' : '▶';
+  play.title = running ? 'Pause' : shown ? 'Start' : 'Add a task first';
+  play.classList.toggle('on', running);
+  $('split').hidden = !shown;
+
+  const dot = $('dot');
+  dot.className = 'dot' + (running && state.focus.current ? ' ' + state.focus.current.kind : '');
+  dot.title = running && state.focus.current ? `${state.focus.current.key}: ${state.focus.current.kind}` : '';
+}
+
+function renderNudge() {
+  const n = state.focus.nudge;
+  const box = $('nudge');
+  box.hidden = !n;
+  if (!n) return;
+  const text = $('nudgeText');
+  text.replaceChildren(el('b', '', `${formatDuration(n.ms)} on ${n.key}.`), ` Still on “${shownTask()?.title ?? 'your task'}”?`);
+}
+
+// ---------- expanded ----------
+
+function renderFocus() {
+  const box = $('focus');
+  box.replaceChildren();
+  if (state.focus.browserBlocked) {
+    const line = el('div', 'notice', `${state.focus.browserBlocked} didn't share its open tab, so it counts as context. `);
+    const fix = el('button', 'link', 'Allow in Settings');
+    fix.onclick = () => void api.act({ type: 'openAutomationSettings' });
+    line.append(fix);
+    box.append(line);
+  }
+  const t = shownTask();
+  if (!state.settings.focusTracking || !t?.focus) return;
+  const f = t.focus;
+  const total = f.work + f.context + f.distraction;
+  if (total < 1000) return;
+  const bar = el('div', 'split');
+  for (const k of ['work', 'context', 'distraction'] as const) {
+    const s = el('span', k);
+    s.style.width = (f[k] / total) * 100 + '%';
+    bar.append(s);
+  }
+  const legend = el('div', 'legend');
+  const item = (cls: string, label: string) => {
+    const s = el('span');
+    s.append(el('i', ''), label);
+    (s.firstChild as HTMLElement).style.background = `var(--${cls === 'work' ? 'ahead' : cls === 'distraction' ? 'behind' : 'context'})`;
+    legend.append(s);
+  };
+  item('work', `work ${minutes(f.work)}`);
+  item('context', `context ${minutes(f.context)}`);
+  item('distraction', `distraction ${minutes(f.distraction)}`);
+  const top = Object.entries(t.sources ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  box.append(bar, legend);
+  if (top.length) box.append(el('div', '', top.map(([k, ms]) => `${k} ${minutes(ms)}`).join(' · ')));
+}
 
 let dragId: string | null = null;
 
@@ -201,7 +136,7 @@ function renderList() {
   list.replaceChildren();
   const run = state.run;
   if (!run || !run.tasks.length) {
-    list.append(el('li', 'empty', state.settings.mode === 'auto' ? 'Switch to Manual to time your own task list' : 'Type a task below or click Import to paste your notes'));
+    list.append(el('li', 'empty', 'Type a task below, or Import your notes.'));
     return;
   }
   // Unfinished first in priority order, finished ones sink to the bottom.
@@ -218,14 +153,11 @@ function renderList() {
 function row(run: Run, t: Task): HTMLLIElement {
   const section = isSection(run, t);
   const li = el('li');
-  li.dataset.id = t.id;
   if (section) li.classList.add('section');
   if (t.done) li.classList.add('done');
   if (run.activeTaskId === t.id) li.classList.add('active');
-  li.style.paddingLeft = 6 + depth(run, t) * 14 + 'px';
+  li.style.paddingLeft = 8 + depth(run, t) * 14 + 'px';
 
-  const grip = el('span', 'grip', '⋮⋮');
-  li.append(grip);
   if (!section) {
     const check = el('span', 'check', '✓');
     check.title = t.done ? 'Mark as not done' : 'Mark done';
@@ -235,24 +167,40 @@ function row(run: Run, t: Task): HTMLLIElement {
     };
     li.append(check);
   }
-  li.append(el('span', 'name', t.title));
+  const name = el('span', 'name', t.title);
+  name.title = 'Double-click to rename';
+  name.ondblclick = (e) => {
+    e.stopPropagation();
+    inlineEdit(name, t.title, '', (v) => v.trim() && void api.act({ type: 'rename', id: t.id, title: v }));
+  };
+  li.append(name);
 
-  const time = el('span', 'time mono muted');
+  const time = el('span', 't mono muted');
   time.dataset.time = t.id;
   li.append(time);
   if (t.done && !section) {
-    const d = deltaSpan(t.elapsedMs, t.estimateMs);
-    if (d) li.append(d);
+    if (t.estimateMs !== undefined) {
+      const d = t.elapsedMs - t.estimateMs;
+      li.append(el('span', 't mono ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
+    }
     const best = golds.get(taskKey(t.title));
     if (best !== undefined && t.elapsedMs <= best) li.append(el('span', 'gold', '★'));
   } else if (section) {
     const est = totalEstimate(run, t);
     if (est !== undefined) li.append(el('span', 'chip', formatEstimate(est)));
   } else {
-    li.append(estimateChip(t));
+    const chip = el('span', 'chip editable', t.estimateMs !== undefined ? formatEstimate(t.estimateMs) : 'est');
+    chip.title = 'How long do you think this takes? e.g. 25m, 1h30m';
+    chip.onclick = (e) => {
+      e.stopPropagation();
+      inlineEdit(chip, t.estimateMs !== undefined ? formatEstimate(t.estimateMs).replace(' ', '') : '', '25m', (v) =>
+        void api.act({ type: 'setEstimate', id: t.id, text: v }),
+      );
+    };
+    li.append(chip);
   }
 
-  const remove = el('button', 'icon remove', '×');
+  const remove = el('button', 'ic remove', '×');
   remove.title = 'Remove';
   remove.onclick = (e) => {
     e.stopPropagation();
@@ -260,7 +208,10 @@ function row(run: Run, t: Task): HTMLLIElement {
   };
   li.append(remove);
 
-  if (!section && !t.done) li.onclick = () => void api.act({ type: 'start', id: t.id });
+  if (!section && !t.done) {
+    li.title = 'Click to work on this';
+    li.onclick = () => void api.act({ type: 'start', id: t.id });
+  }
 
   li.draggable = true;
   li.ondragstart = () => (dragId = t.id);
@@ -279,56 +230,7 @@ function row(run: Run, t: Task): HTMLLIElement {
   return li;
 }
 
-// ---------- live ticking ----------
-
-function tick() {
-  if (!state) return;
-  const now = Date.now();
-  const run = state.run;
-  const timer = document.querySelector<HTMLElement>('.timer');
-
-  if (state.settings.mode === 'auto') {
-    if (timer) timer.textContent = state.activity && state.capture.running ? formatDuration(now - state.activity.since) : '0:00';
-  } else if (run) {
-    const active = run.tasks.find((t) => t.id === run.activeTaskId) ?? run.tasks.find((t) => !t.done && !isSection(run, t));
-    if (active && timer) {
-      const elapsed = liveElapsed(run, active, now);
-      timer.textContent = formatDuration(elapsed, { tenths: elapsed < 60_000 });
-      const delta = document.querySelector<HTMLElement>('.meta .delta');
-      if (delta) {
-        delta.replaceChildren();
-        const d = deltaSpan(elapsed, active.estimateMs);
-        if (d) delta.append(d);
-      }
-      const bar = document.querySelector<HTMLElement>('.bar');
-      if (bar && active.estimateMs) {
-        const pct = (elapsed / active.estimateMs) * 100;
-        (bar.firstElementChild as HTMLElement).style.width = Math.min(100, pct) + '%';
-        bar.classList.toggle('over', pct > 100);
-      } else if (bar) bar.style.visibility = 'hidden';
-    }
-    for (const span of document.querySelectorAll<HTMLElement>('[data-time]')) {
-      const t = run.tasks.find((x) => x.id === span.dataset.time);
-      if (!t) continue;
-      const ms = totalElapsed(run, t, now);
-      span.textContent = ms >= 1000 ? formatDuration(ms) : '';
-    }
-  }
-
-  if (run) {
-    $('runTime').textContent = formatDuration(runElapsed(run, now));
-    const left = projectedRemaining(run, now);
-    const finish = new Date(now + left);
-    $('pace').textContent = left > 0 ? `· done ~${finish.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
-  } else {
-    $('runTime').textContent = '0:00';
-    $('pace').textContent = '';
-  }
-}
-
-// ---------- settings, import, add ----------
-
-function renderSettings() {
+function renderLook() {
   const sw = $('swatches');
   sw.replaceChildren();
   for (const c of ACCENTS) {
@@ -347,54 +249,118 @@ function renderSettings() {
   $<HTMLInputElement>('opacity').value = String(state.settings.opacity);
 }
 
+// ---------- live ticking ----------
+
+function tick() {
+  if (!state) return;
+  const now = Date.now();
+  const run = state.run;
+  const shown = shownTask();
+  const time = $('time');
+  const delta = $('delta');
+  const progress = $('progress');
+
+  if (run && shown) {
+    const elapsed = liveElapsed(run, shown, now);
+    time.textContent = formatDuration(elapsed);
+    time.className = 'time mono' + (isRunning() ? '' : ' paused');
+    if (shown.estimateMs !== undefined && elapsed > 0) {
+      const d = elapsed - shown.estimateMs;
+      delta.textContent = formatDuration(d, { signed: true });
+      delta.className = 'delta mono ' + (d <= 0 ? 'ahead' : 'behind');
+      progress.style.width = Math.min(100, (elapsed / shown.estimateMs) * 100) + '%';
+      progress.parentElement!.classList.toggle('over', d > 0);
+    } else {
+      delta.textContent = '';
+      progress.style.width = '0';
+    }
+  } else {
+    time.textContent = run ? formatDuration(runElapsed(run, now)) : '0:00';
+    time.className = 'time mono paused';
+    delta.textContent = '';
+    progress.style.width = '0';
+  }
+
+  if (run && !$('more').hidden) {
+    for (const span of document.querySelectorAll<HTMLElement>('[data-time]')) {
+      const t = run.tasks.find((x) => x.id === span.dataset.time);
+      if (!t) continue;
+      const ms = totalElapsed(run, t, now);
+      span.textContent = ms >= 1000 ? formatDuration(ms) : '';
+    }
+  }
+}
+
 function render() {
   document.documentElement.style.setProperty('--accent', state.settings.accent);
   golds = new Map(state.golds);
-  const mode = $('mode');
-  mode.textContent = (state.settings.mode === 'auto' ? '◉ AUTO' : 'MANUAL') + ' ▾';
-  for (const b of document.querySelectorAll<HTMLElement>('.mode-option')) b.classList.toggle('on', b.dataset.mode === state.settings.mode);
-  $('endBtn').hidden = state.settings.mode === 'auto' || !state.run;
-  renderCurrent();
-  if (!editing) renderList();
-  if (!$('settings').hidden) renderSettings();
+  renderBar();
+  renderNudge();
+  if (!$('more').hidden) {
+    renderFocus();
+    if (!editing) renderList();
+    if (!$('look').hidden) renderLook();
+  }
+  const focusBtn = $('focusBtn');
+  focusBtn.textContent = state.settings.focusTracking ? 'Focus ✓' : 'Focus off';
+  focusBtn.title = 'Notices which app or site you are in while a task runs and nudges you after long distractions. No screenshots.';
+  focusBtn.classList.toggle('on', state.settings.focusTracking);
+  $('endBtn').hidden = !state.run;
   tick();
 }
 
+function setExpanded(open: boolean) {
+  $('more').hidden = !open;
+  $('expand').classList.toggle('open', open);
+  render();
+}
+
 function wire() {
-  const modes = $('modes');
-  $('mode').onclick = () => (modes.hidden = !modes.hidden);
-  for (const b of modes.querySelectorAll<HTMLElement>('.mode-option')) {
-    b.onclick = () => {
-      modes.hidden = true;
-      void api.act({ type: 'setMode', mode: b.dataset.mode as 'manual' | 'auto' });
-    };
+  $('play').onclick = () => {
+    const shown = shownTask();
+    if (!shown) {
+      setExpanded(true);
+      $('addInput').focus();
+    } else if (state.run?.activeTaskId) void api.act({ type: 'togglePause' });
+    else void api.act({ type: 'start', id: shown.id });
+  };
+  $('split').onclick = () => {
+    const shown = shownTask();
+    if (!shown) return;
+    void (state.run?.activeTaskId ? api.act({ type: 'split' }) : api.act({ type: 'toggleDone', id: shown.id }));
+  };
+  $('expand').onclick = () => setExpanded($('more').hidden);
+
+  for (const b of document.querySelectorAll<HTMLElement>('[data-answer]')) {
+    b.onclick = () => void api.act({ type: 'nudge', answer: b.dataset.answer as 'back' | 'pause' | 'allow' });
   }
-  $('endBtn').onclick = () => void api.act({ type: 'endRun' });
+
   $('dashBtn').onclick = () => void api.act({ type: 'openDashboard' });
   $('hideBtn').onclick = () => void api.act({ type: 'hideOverlay' });
-  $('settingsBtn').onclick = () => {
-    const p = $('settings');
-    p.hidden = !p.hidden;
-    if (!p.hidden) renderSettings();
+  $('endBtn').onclick = () => void api.act({ type: 'endRun' });
+  $('focusBtn').onclick = () => void api.act({ type: 'settings', patch: { focusTracking: !state.settings.focusTracking } });
+  $('lookBtn').onclick = () => {
+    $('look').hidden = !$('look').hidden;
+    render();
   };
   $<HTMLInputElement>('opacity').oninput = (e) =>
     void api.act({ type: 'settings', patch: { opacity: Number((e.target as HTMLInputElement).value) } });
 
-  const modal = $('importModal');
+  const imp = $('import');
   $('importBtn').onclick = () => {
-    modal.hidden = false;
-    $<HTMLTextAreaElement>('importText').focus();
+    imp.hidden = !imp.hidden;
+    if (!imp.hidden) $<HTMLTextAreaElement>('importText').focus();
   };
-  $('importCancel').onclick = () => (modal.hidden = true);
+  $('importCancel').onclick = () => (imp.hidden = true);
   $('importFile').onclick = () => {
-    modal.hidden = true;
+    imp.hidden = true;
     void api.act({ type: 'importFile' });
   };
   $('importGo').onclick = () => {
     const ta = $<HTMLTextAreaElement>('importText');
     if (ta.value.trim()) void api.act({ type: 'import', text: ta.value });
     ta.value = '';
-    modal.hidden = true;
+    imp.hidden = true;
   };
 
   $('addForm').onsubmit = (e) => {
@@ -403,20 +369,20 @@ function wire() {
     if (input.value.trim()) void api.act({ type: 'quickAdd', text: input.value });
     input.value = '';
   };
-  api.onFocusAdd(() => $('addInput').focus());
+  api.onFocusAdd(() => {
+    setExpanded(true);
+    $('addInput').focus();
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      $('settings').hidden = true;
-      modes.hidden = true;
-      modal.hidden = true;
+      imp.hidden = true;
+      $('look').hidden = true;
     }
   });
-  document.addEventListener('click', (e) => {
-    const p = $('settings');
-    if (!p.hidden && !p.contains(e.target as Node) && e.target !== $('settingsBtn')) p.hidden = true;
-    if (!modes.hidden && !modes.contains(e.target as Node) && e.target !== $('mode')) modes.hidden = true;
-  });
+
+  // The window is exactly as tall as what's showing.
+  new ResizeObserver(() => void api.act({ type: 'fitHeight', height: $('panel').offsetHeight })).observe($('panel'));
 }
 
 wire();
@@ -426,4 +392,4 @@ api.onState((s) => {
 });
 state = await api.getState();
 render();
-setInterval(tick, 100);
+setInterval(tick, 250);

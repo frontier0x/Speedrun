@@ -1,23 +1,24 @@
 :root {
-  --accent: #7c5cff;
-  --bg: rgba(16, 16, 22, 0.92);
-  --bg-solid: #101016;
+  --accent: #e8e8e8;
+  --bg: rgba(10, 10, 10, 0.94);
+  --bg-solid: #0a0a0a;
   --panel: rgba(255, 255, 255, 0.04);
   --line: rgba(255, 255, 255, 0.08);
-  --text: #ecebf3;
-  --muted: #8b8a99;
-  --ahead: #22c55e;
-  --behind: #ef4444;
-  --gold: #f5c542;
-  --radius: 14px;
-  --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  --text: #ededed;
+  --muted: #7d7d7d;
+  --ahead: #4ade80;
+  --behind: #f87171;
+  --context: #a3a3a3;
+  --gold: #facc15;
+  --radius: 12px;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body {
-  font: 13px/1.4 -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  font: 12px/1.45 -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -27,7 +28,7 @@ button {
   border-radius: 8px; padding: 4px 9px; cursor: pointer;
 }
 button:hover { background: rgba(255, 255, 255, 0.09); }
-button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
+button.primary { background: var(--accent); border-color: transparent; color: #0a0a0a; font-weight: 600; }
 button.primary:hover { filter: brightness(1.1); }
 button.icon { padding: 3px 7px; border-color: transparent; background: transparent; color: var(--muted); }
 button.icon:hover { color: var(--text); background: var(--panel); }
