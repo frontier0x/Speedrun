@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Action, Activity, AppState } from './api.js';
-import { Capture } from './capture.js';
+import { Capture, readPermissions, type Permissions } from './capture.js';
 import {
   addTasks, completeActive, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
   parseTaskList, pause, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
@@ -24,6 +24,7 @@ let run: Run | null = null;
 let pastRuns: Run[] = [];
 let activity: Activity | null = null;
 let idle = false;
+let permissions: Permissions = readPermissions();
 
 let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
@@ -38,12 +39,16 @@ const capture = new Capture(dayStore, {
     idle = v;
     broadcast();
   },
+  onPermissions: (p) => {
+    permissions = p;
+    broadcast();
+  },
 });
 
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, settings, golds: [...goldSplits(pastRuns)], activity, idle };
+  return { run, settings, golds: [...goldSplits(pastRuns)], activity, idle, permissions };
 }
 
 function broadcast() {
@@ -146,6 +151,16 @@ async function act(a: Action) {
     case 'openDashboard':
       openDashboard();
       return;
+    case 'openPermission':
+      if (a.which === 'accessibility') systemPreferences.isTrustedAccessibilityClient(true); // shows macOS's own prompt
+      void shell.openExternal(
+        `x-apple.systempreferences:com.apple.preference.security?${a.which === 'screen' ? 'Privacy_ScreenCapture' : 'Privacy_Accessibility'}`,
+      );
+      return;
+    case 'relaunch':
+      app.relaunch();
+      app.quit();
+      return;
     case 'hideOverlay':
       overlay?.hide();
       buildMenu();
@@ -219,8 +234,6 @@ function openDashboard() {
   });
   void dashboard.loadFile(join(staticDir, 'dashboard.html'));
   dashboard.on('closed', () => (dashboard = null));
-  app.dock?.show();
-  dashboard.on('closed', () => app.dock?.hide());
 }
 
 // ---------- tray ----------
@@ -251,6 +264,12 @@ function buildMenu() {
       { label: 'Start new run', click: () => void act({ type: 'newRun' }) },
       { label: "Open today's capture log", click: () => void shell.openPath(dayStore.dayDir()) },
       { type: 'separator' },
+      {
+        label: 'Open at login',
+        type: 'checkbox',
+        checked: app.getLoginItemSettings().openAtLogin,
+        click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
+      },
       { label: 'Quit Speedrun', role: 'quit' },
     ]),
   );
@@ -258,8 +277,16 @@ function buildMenu() {
 
 // ---------- boot ----------
 
+// One Speedrun at a time: a second launch just brings the timer forward.
+if (!app.requestSingleInstanceLock()) app.quit();
+app.on('second-instance', () => {
+  overlay?.show();
+  overlay?.focus();
+});
+
 app.whenReady().then(async () => {
-  app.dock?.hide();
+  // The packaged app gets its icon from the bundle; `npm start` runs plain Electron, so set it here.
+  if (!app.isPackaged) app.dock?.setIcon(join(staticDir, 'icons', 'icon-256.png'));
   settings = await runStore.loadSettings();
   pastRuns = await runStore.list();
   const today = new Date().toLocaleDateString('sv-SE');
@@ -275,17 +302,13 @@ app.whenReady().then(async () => {
     return { summaries: merged.map((r) => summarize(r)), runs: merged };
   });
 
-  tray = new Tray(nativeImage.createEmpty());
+  const trayIcon = nativeImage.createFromPath(join(staticDir, 'icons', 'trayTemplate.png'));
+  trayIcon.setTemplateImage(true);
+  tray = new Tray(trayIcon);
+  tray.setToolTip('Speedrun');
   buildMenu();
   createOverlay();
   applyMode();
-
-  if (process.platform === 'darwin' && settings.mode === 'auto') {
-    const screenAccess = systemPreferences.getMediaAccessStatus('screen');
-    if (screenAccess !== 'granted') {
-      console.warn(`[speedrun] Screen Recording permission is "${screenAccess}". Allow it in System Settings › Privacy & Security, then restart.`);
-    }
-  }
 
   powerMonitor.on('lock-screen', () => capture.goIdle());
   powerMonitor.on('suspend', () => capture.goIdle());
@@ -311,5 +334,12 @@ app.on('will-quit', () => {
   }
 });
 
-// Menu-bar app: keep running with no windows open.
+// Keep running with no windows open: the menu bar item and Dock icon bring the timer back.
 app.on('window-all-closed', () => {});
+
+// Clicking the Dock icon brings the timer back.
+app.on('activate', () => {
+  if (!overlay) createOverlay();
+  else overlay.show();
+  buildMenu();
+});

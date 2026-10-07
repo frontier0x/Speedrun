@@ -75,7 +75,9 @@ function renderCurrent() {
     row.append(el('div', 'timer mono' + (state.idle ? ' paused' : ''), '0:00'));
     box.append(row);
     if (a?.title) box.append(el('div', 'meta muted', a.title));
-    box.append(el('div', 'meta muted small', 'AutoCapture is recording app and tab switches. AI task detection is next.'));
+    const missing = permissionNotice();
+    if (missing) box.append(missing);
+    else box.append(el('div', 'meta muted small', 'AutoCapture is recording app and tab switches. AI task detection is next.'));
     return;
   }
 
@@ -137,6 +139,33 @@ function renderCurrent() {
     bar.append(el('div'));
     box.append(bar);
   }
+}
+
+/** In AutoCapture, say plainly which macOS permission is missing and link straight to it. */
+function permissionNotice(): HTMLElement | null {
+  const p = state.permissions;
+  if (p.screen && p.accessibility) return null;
+  const box = el('div', 'notice');
+  box.append(
+    el('div', 'notice-title', 'AutoCapture needs permission'),
+    el('div', 'muted small', !p.screen
+      ? 'Without Screen Recording it only sees app names: no window titles, no screenshots.'
+      : 'Without Accessibility it can’t see which browser tab you’re on.'),
+  );
+  const row = el('div', 'row');
+  const ask = (which: 'screen' | 'accessibility', label: string) => {
+    const b = el('button', 'primary', label);
+    b.onclick = () => void api.act({ type: 'openPermission', which });
+    row.append(b);
+  };
+  if (!p.screen) ask('screen', 'Allow Screen Recording');
+  if (!p.accessibility) ask('accessibility', 'Allow Accessibility');
+  const restart = el('button', '', 'Restart');
+  restart.title = 'macOS applies Screen Recording after a restart';
+  restart.onclick = () => void api.act({ type: 'relaunch' });
+  row.append(restart);
+  box.append(row);
+  return box;
 }
 
 // ---------- list ----------

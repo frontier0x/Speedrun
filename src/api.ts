@@ -16,6 +16,8 @@ export interface AppState {
   /** What AutoCapture currently sees. */
   activity: Activity | null;
   idle: boolean;
+  /** macOS permissions AutoCapture needs; both true elsewhere. */
+  permissions: { screen: boolean; accessibility: boolean };
 }
 
 export type Action =
@@ -34,7 +36,9 @@ export type Action =
   | { type: 'setMode'; mode: Mode }
   | { type: 'newRun' }
   | { type: 'openDashboard' }
-  | { type: 'hideOverlay' };
+  | { type: 'hideOverlay' }
+  | { type: 'openPermission'; which: 'screen' | 'accessibility' }
+  | { type: 'relaunch' };
 
 export interface SpeedrunApi {
   getState(): Promise<AppState>;

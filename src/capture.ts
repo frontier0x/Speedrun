@@ -1,4 +1,4 @@
-import { powerMonitor, type Rectangle } from 'electron';
+import { powerMonitor, systemPreferences, type Rectangle } from 'electron';
 import { activeWindow } from 'get-windows';
 import { ChangeTracker } from './detect.js';
 import { hammingDistance, toHex } from './hash.js';
@@ -12,10 +12,27 @@ const SAME_SCREEN_BITS = 4; // dHash distance at or below this counts as "screen
 
 export const IDLE_AFTER_S = 120;
 
+export interface Permissions {
+  /** Screen Recording: needed for screenshots and window titles. */
+  screen: boolean;
+  /** Accessibility: needed for the browser tab URL. */
+  accessibility: boolean;
+}
+
+/** What macOS currently allows. Other platforms don't gate these. */
+export function readPermissions(): Permissions {
+  if (process.platform !== 'darwin') return { screen: true, accessibility: true };
+  return {
+    screen: systemPreferences.getMediaAccessStatus('screen') === 'granted',
+    accessibility: systemPreferences.isTrustedAccessibilityClient(false),
+  };
+}
+
 export interface CaptureCallbacks {
   /** A new app or tab became the current activity. */
   onActivity(window: WindowSnapshot, since: number): void;
   onIdle(idle: boolean): void;
+  onPermissions(p: Permissions): void;
 }
 
 /** AutoCapture: watches window/tab switches, takes screenshots on change and every 30s if the screen moved. */
@@ -28,11 +45,28 @@ export class Capture {
   private lastSavedHash: bigint | undefined;
   private lastScreenshotAt = 0;
   private queue = Promise.resolve();
+  private perms: Permissions = { screen: true, accessibility: true };
+  private permsCheckedAt = 0;
 
   constructor(
     private readonly store: DayStore,
     private readonly cb: CaptureCallbacks,
   ) {}
+
+  get permissions(): Permissions {
+    return this.perms;
+  }
+
+  /** Re-read permissions every few seconds so granting one takes effect without a restart where macOS allows. */
+  private refreshPermissions(force = false) {
+    if (!force && Date.now() - this.permsCheckedAt < 5000) return;
+    this.permsCheckedAt = Date.now();
+    const next = readPermissions();
+    if (next.screen !== this.perms.screen || next.accessibility !== this.perms.accessibility || force) {
+      this.perms = next;
+      this.cb.onPermissions(next);
+    }
+  }
 
   get running() {
     return this.timer !== undefined;
@@ -40,6 +74,7 @@ export class Capture {
 
   start() {
     if (this.timer) return;
+    this.refreshPermissions(true);
     this.enqueue(() => this.record('session_start', undefined, { screenshot: true, force: true }));
     this.timer = setInterval(() => {
       if (this.ticking) return;
@@ -76,8 +111,8 @@ export class Capture {
 
   private async record(kind: EventKind, window?: WindowSnapshot, opts: { screenshot?: boolean; force?: boolean } = {}) {
     const event: CaptureEvent = { ts: new Date().toISOString(), kind, window };
-    if (opts.screenshot) {
-      const shot = await captureScreen(this.lastBounds);
+    if (opts.screenshot && this.perms.screen) {
+      const shot = await captureScreen(this.lastBounds).catch(() => null);
       this.lastScreenshotAt = Date.now();
       if (shot) {
         event.screenHash = toHex(shot.hash);
@@ -95,7 +130,9 @@ export class Capture {
   }
 
   private async readWindow(): Promise<WindowSnapshot | null> {
-    const w = await activeWindow();
+    // Without a permission, ask get-windows for less instead of failing: no title without
+    // Screen Recording, no URL without Accessibility, but the app name always works.
+    const w = await activeWindow({ screenRecordingPermission: this.perms.screen, accessibilityPermission: this.perms.accessibility });
     if (!w) return null;
     this.lastBounds = w.bounds;
     return {
@@ -107,6 +144,7 @@ export class Capture {
   }
 
   private async tick() {
+    this.refreshPermissions();
     const idleSeconds = powerMonitor.getSystemIdleTime();
     if (!this.idle && idleSeconds >= IDLE_AFTER_S) {
       this.setIdle(true);
