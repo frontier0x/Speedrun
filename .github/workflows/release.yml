@@ -31,6 +31,15 @@ jobs:
             git tag "$tag"
             git push origin "$tag"
           fi
-      - run: npm run release
+      - run: npm run dist
+      # One upload step, so the Apple Silicon and Intel builds land in the same release.
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          shopt -s nullglob
+          files=(release/*.dmg release/*.zip release/latest-mac.yml)
+          gh release create "$tag" --verify-tag --title "Speedrun ${tag#v}" \
+            --notes "Download **Speedrun-${tag#v}-arm64.dmg** for Apple Silicon Macs (M1 and newer) or **Speedrun-${tag#v}.dmg** for Intel Macs. Open it, drag Speedrun into Applications, then right-click it and choose Open the first time." \
+            "${files[@]}"
