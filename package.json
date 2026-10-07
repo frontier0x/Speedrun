@@ -1,6 +1,6 @@
 {
   "name": "speedrun",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Speedrun your day: an open-source, local-first tracker that splits your computer time into tasks.",
   "license": "MIT",
   "type": "module",
@@ -11,9 +11,6 @@
     "test": "npm run build && node --test dist/*.test.js",
     "dist": "npm run build && electron-builder --mac --publish never",
     "release": "npm run build && electron-builder --mac --publish always"
-  },
-  "dependencies": {
-    "get-windows": "^9.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -38,9 +35,6 @@
       "static/**/*",
       "package.json"
     ],
-    "asarUnpack": [
-      "node_modules/get-windows/**"
-    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "build/icon.png",
@@ -63,8 +57,7 @@
       "identity": "-",
       "hardenedRuntime": false,
       "extendInfo": {
-        "NSScreenCaptureUsageDescription": "AutoCapture takes screenshots when you switch tasks so it can tell what you worked on. They stay on your Mac.",
-        "NSAppleEventsUsageDescription": "AutoCapture reads the current browser tab's address."
+        "NSAppleEventsUsageDescription": "Speedrun asks your browser for the current tab’s address, so it can tell work from distractions. Nothing leaves your Mac."
       }
     },
     "dmg": {

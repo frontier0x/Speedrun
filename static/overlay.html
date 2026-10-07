@@ -8,55 +8,59 @@
   <link rel="stylesheet" href="overlay.css" />
 </head>
 <body>
-  <div class="panel">
-    <header class="drag">
-      <div class="modes no-drag" role="tablist">
-        <button id="modeManual" title="Manual: you write the task list and press Start">Manual</button>
-        <button id="modeAuto" title="Auto: Speedrun records which app and tab you're in, nothing to press">Auto</button>
+  <div class="panel" id="panel">
+    <div class="bar drag">
+      <span class="dot" id="dot"></span>
+      <span class="task" id="task"></span>
+      <span class="delta mono" id="delta"></span>
+      <span class="time mono" id="time">0:00</span>
+      <div class="ctl no-drag">
+        <button class="ic" id="play" title="Start">▶</button>
+        <button class="ic" id="split" title="Done, next task (⌘⇧↩)">✓</button>
+        <button class="ic" id="expand" title="Tasks and settings">⌄</button>
       </div>
-      <span class="run-time mono" id="runTime">0:00</span>
-      <span class="pace muted" id="pace"></span>
-      <div class="spacer"></div>
-      <div class="no-drag tools">
-        <button class="text-btn" id="importBtn" title="Paste a task list from your notes">Import</button>
-        <button class="icon" id="dashBtn" title="Dashboard">▦</button>
-        <button class="icon" id="settingsBtn" title="Color and opacity">◐</button>
-        <button class="icon" id="hideBtn" title="Hide (⌘⇧Space)">—</button>
-      </div>
-    </header>
-
-    <div class="hint muted small" id="hint"></div>
-
-    <section class="current" id="current"></section>
-
-    <ol class="list no-drag" id="list"></ol>
-
-    <form class="add no-drag" id="addForm">
-      <input id="addInput" placeholder="Add a task… e.g. “Write spec 30m”, “!” puts it on top" autocomplete="off" />
-    </form>
-
-    <div class="popover no-drag" id="settings" hidden>
-      <div class="label">Accent</div>
-      <div class="swatches" id="swatches"></div>
-      <div class="label">Opacity</div>
-      <input type="range" id="opacity" min="0.4" max="1" step="0.02" />
-      <div class="label">Modes</div>
-      <div class="muted small"><b>Manual</b>: you write the task list and press Start. The timer runs on the task you're on; Done moves to the next one.<br /><b>Auto</b>: Speedrun records which app and tab you're in and times them for you. Nothing to press.</div>
-      <div class="label">Shortcuts</div>
-      <div class="muted small">⌘⇧↩ done, next task · ⌘⇧N add task · ⌘⇧Space show/hide</div>
+      <div class="progress"><div id="progress"></div></div>
     </div>
 
-    <div class="modal no-drag" id="importModal" hidden>
-      <div class="modal-body">
-        <div class="label">Paste your notes</div>
-        <textarea id="importText" rows="9" placeholder="- Write landing copy ~45m&#10;- Build page&#10;  - Hero section 1h&#10;  - Pricing table 30m&#10;- [ ] Reply to emails (15m)"></textarea>
-        <div class="muted small">Bullets, checkboxes, # headings and indentation become sections. Add time with ~30m, (1h), [45m] or just 30m.</div>
-        <div class="row">
-          <button type="button" id="importFile">Open file…</button>
-          <div class="spacer"></div>
-          <button type="button" id="importCancel">Cancel</button>
-          <button type="button" class="primary" id="importGo">Add tasks</button>
+    <div class="nudge no-drag" id="nudge" hidden>
+      <div id="nudgeText"></div>
+      <div class="links">
+        <button class="link" data-answer="back">Back to it</button>
+        <button class="link" data-answer="pause">Pause</button>
+        <button class="link" data-answer="allow">Part of this task</button>
+      </div>
+    </div>
+
+    <div class="more no-drag" id="more" hidden>
+      <div class="focus" id="focus"></div>
+      <ol class="list" id="list"></ol>
+      <form class="add" id="addForm">
+        <input id="addInput" placeholder="Add a task  ·  e.g. Write copy 30m" autocomplete="off" />
+      </form>
+
+      <div class="import" id="import" hidden>
+        <textarea id="importText" rows="7" placeholder="- Write landing copy ~45m&#10;- Build page&#10;  - Hero section 1h&#10;- [ ] Reply to emails (15m)"></textarea>
+        <div class="links">
+          <button class="link" id="importFile" type="button">Open file…</button>
+          <span class="spacer"></span>
+          <button class="link" id="importCancel" type="button">Cancel</button>
+          <button class="link strong" id="importGo" type="button">Add tasks</button>
         </div>
+      </div>
+
+      <div class="look" id="look" hidden>
+        <div class="swatches" id="swatches"></div>
+        <input type="range" id="opacity" min="0.4" max="1" step="0.02" title="Opacity" />
+      </div>
+
+      <div class="foot links">
+        <button class="link" id="importBtn">Import</button>
+        <button class="link" id="focusBtn"></button>
+        <button class="link" id="lookBtn">Look</button>
+        <button class="link" id="dashBtn">Stats</button>
+        <span class="spacer"></span>
+        <button class="link" id="endBtn">End run</button>
+        <button class="link" id="hideBtn" title="Hide (⌘⇧Space)">Hide</button>
       </div>
     </div>
   </div>

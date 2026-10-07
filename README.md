@@ -13,43 +13,50 @@ best times.
    Apple account yet. Right-click Speedrun › **Open**, or go to System Settings › Privacy & Security ›
    **Open Anyway**. After that it opens normally.
 
-Speedrun shows a ⏱ in the menu bar, a Dock icon and the floating timer. Tick **Open at login** in the
+Speedrun shows a stopwatch icon in the menu bar and the floating timer bar (no Dock icon). Tick **Open at login** in the
 menu bar menu to have it start with your Mac.
 
-## Two modes
+## The timer
 
-**Manual:** your own task list.
-
-- A floating timer stays on top of every app and every desktop. Drag it anywhere, resize it, and it
-  shrinks down to just the clock when you make it small.
-- Paste your notes or open a `.md`/`.txt` file. Bullets, checkboxes, `#` headings and indentation
-  become tasks and sections.
-- Add a time estimate to any task (`~30m`, `(1h)`, `[45m]` or just `30m`) and watch the delta while
-  you work: green while you're under, red once you're over.
-- **Start** starts the timer on the top task (or on an untitled one if the list is empty). **Done**
-  (`⌘⇧↩`) finishes the current task and starts the next one. Click any task to switch to it.
-- **End run** saves the run to the dashboard and gives you a fresh list.
-- Quick-add from the bottom of the timer or with `⌘⇧N`. Start the line with `!` to put it on top.
-  Drag tasks to reprioritize.
-- Pick any accent color and adjust the opacity.
+- A small bar floats above every app, every Space and full-screen windows: the current task, its time,
+  how far you are over or under your estimate, ▶/❚❚ and ✓. Drag it anywhere.
+- ⌄ opens the task list, quick-add, Import and settings. The window is always exactly as tall as what's
+  showing.
+- Click **Import** to paste your notes or open a `.md`/`.txt` file. Bullets, checkboxes, `#` headings and
+  indentation become tasks and sections.
+- Add a time estimate to any task (`~30m`, `(1h)`, `[45m]` or just `30m`): green while you're under,
+  red once you're over.
+- **▶** starts the clock, **✓** (`⌘⇧↩`) finishes the task and starts the next. Click any task to switch
+  to it. **End run** saves the run so the next task starts a fresh one.
 - Gold splits: beat your best time on a task you've done before and it turns gold ★.
-- The header shows total run time and when you'll be done at your estimated pace.
 
-**AutoCapture:** it watches what you do.
+## Focus tracking
 
-- Checks the active app, window title and browser tab URL once a second, which is cheap and takes no
-  screenshot.
-- Logs an event with a screenshot when you switch apps or tabs or the window title changes, once the
-  change has held for 1.5 s.
-- Takes a heartbeat screenshot every 30 s and skips it if the screen hasn't changed (perceptual hash).
-- Detects idle (2 minutes without input, screen lock or sleep).
-- The timer shows the app you're in, how long you've been in it, and today's time per app. **Pause**
-  stops recording until you press **Record** again.
-- Coming next: an AI referee that turns these events into named splits and nudges you when you drift.
+You jump between apps and tabs all the time, and almost none of that is a task switch. So focus
+tracking never decides what you're working on: the task you started is the task. It only sorts each
+moment into one of three buckets:
+
+- **Work**: editors, terminals, Figma, Notion, GitHub, Google Docs…
+- **Context**: search, AI chats, docs, Slack, mail, and anything it doesn't know
+- **Distraction**: YouTube, X, Instagram, Reddit, news, shopping…
+
+Short hops never count against you. If one distraction runs past 2 minutes (or distraction takes up
+about a third of the last 10), the bar asks whether you're still on your task: **Back to it**, **Pause**
+or **Part of this task** (that app or site then counts as work for this task). Each task shows its
+work/context/distraction split and top apps and sites, in the timer and on the dashboard.
+
+No screenshots and no AI, just rules. It needs no Screen Recording and no Accessibility permission:
+
+- The app in front comes from macOS, which needs no permission.
+- For the open tab in Chrome, Safari, Arc, Brave, Edge, Vivaldi or Opera, Speedrun asks the browser over
+  AppleScript. macOS shows a one-time "Speedrun wants to control …" prompt per browser. Decline it and
+  that browser simply counts as context. Firefox can't be asked.
+
+Turn it off under ⌄ › Focus or in the menu bar.
 
 ## Dashboard
 
-Open it from the timer (▦) or the menu bar. It shows every previous run with its splits, estimates vs
+Open it from the timer (⌄ › Stats) or the menu bar. It shows every previous run with its splits, estimates vs
 actuals, best times and sum of best, plus tracked time over the last 14 days, estimate accuracy and
 your streak.
 
@@ -61,7 +68,7 @@ your streak.
 | `⌘⇧N` | Add a task |
 | `⌘⇧Space` | Show or hide the timer |
 
-## Run from source
+## Run it
 
 Requires Node 20+ on macOS.
 
@@ -70,21 +77,20 @@ npm install
 npm start
 ```
 
-AutoCapture needs two macOS permissions. Grant both, then restart with `npm start`:
-
-- **Screen Recording**, for screenshots and window titles.
-- **Accessibility**, to read the current browser tab's URL.
-
-When you run from a terminal, macOS gives the permission to your terminal app (Terminal, iTerm,
-VS Code…), so that's the entry to switch on under System Settings › Privacy & Security.
-
 ## Your data
 
 Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
 
 - `runs/YYYY-MM-DD/run-*.json`: your task runs
-- `runs/YYYY-MM-DD/events.jsonl` and `shots/`: AutoCapture's log and screenshots
-- `settings.json`: color, opacity, mode and timer position
+- `settings.json`: color, opacity, focus tracking and timer position
+
+## Roadmap
+
+1. ✅ Floating timer, task import, estimates, dashboard
+2. ✅ Focus tracking without screenshots or extra permissions
+3. Suggest switching tasks when you spend a while in something that clearly belongs to another one
+4. ✅ Packaged Speedrun.app / .dmg
+5. Daily recap
 
 ## Tests and builds
 
@@ -93,15 +99,7 @@ npm test       # unit tests
 npm run dist   # builds release/Speedrun-*.dmg locally
 ```
 
-Pushing a tag like `v0.2.0` makes GitHub Actions build the .dmg and publish it as a release.
-
-## Roadmap
-
-1. ✅ Event-driven capture
-2. ✅ Manual mode, floating timer, dashboard
-3. AI referee: a pluggable model (Claude Haiku, Gemini or a local Ollama model) that reads each change,
-   opens and closes splits, infers tasks and nudges you when you drift
-4. Daily recap
+Running the Release workflow on GitHub (Actions tab), or pushing a tag like `v0.3.0`, builds the .dmg files and publishes them as a release.
 
 ## License
 

@@ -1,11 +1,14 @@
 // The bridge between the main process and the overlay/dashboard windows.
-import type { Mode, Run, RunSummary, Settings } from './runs.js';
+import type { FocusKind, Nudge } from './focus.js';
+import type { Run, RunSummary, Settings } from './runs.js';
 
-export interface Activity {
-  app: string;
-  title: string;
-  /** Epoch ms when this activity started. */
-  since: number;
+export interface FocusStatus {
+  /** Whatever is in front right now and how it's filed. Null while no task runs or tracking is off. */
+  current: { key: string; kind: FocusKind } | null;
+  /** Shown when a distraction has gone on too long. */
+  nudge: Nudge | null;
+  /** A browser that refused to share its tab (the Automation prompt was declined). */
+  browserBlocked: string | null;
 }
 
 export interface AppState {
@@ -13,15 +16,7 @@ export interface AppState {
   settings: Settings;
   /** Best time per task title (see taskKey), from finished runs. */
   golds: [string, number][];
-  /** What AutoCapture currently sees. */
-  activity: Activity | null;
-  idle: boolean;
-  /** macOS permissions AutoCapture needs; both true elsewhere. */
-  permissions: { screen: boolean; accessibility: boolean };
-  /** AutoCapture is running (it can be paused). */
-  capturing: boolean;
-  /** Time per app today, longest first, not counting the current stretch. */
-  appTimes: [string, number][];
+  focus: FocusStatus;
 }
 
 export type Action =
@@ -32,19 +27,17 @@ export type Action =
   | { type: 'toggleDone'; id: string }
   | { type: 'split' }
   | { type: 'togglePause' }
-  | { type: 'startRun' }
-  | { type: 'toggleCapture' }
   | { type: 'remove'; id: string }
   | { type: 'move'; id: string; beforeId: string | null }
   | { type: 'setEstimate'; id: string; text: string }
   | { type: 'rename'; id: string; title: string }
   | { type: 'settings'; patch: Partial<Settings> }
-  | { type: 'setMode'; mode: Mode }
-  | { type: 'newRun' }
+  | { type: 'endRun' }
+  | { type: 'nudge'; answer: 'back' | 'pause' | 'allow' }
+  | { type: 'openAutomationSettings' }
+  | { type: 'fitHeight'; height: number }
   | { type: 'openDashboard' }
-  | { type: 'hideOverlay' }
-  | { type: 'openPermission'; which: 'screen' | 'accessibility' }
-  | { type: 'relaunch' };
+  | { type: 'hideOverlay' };
 
 export interface SpeedrunApi {
   getState(): Promise<AppState>;
