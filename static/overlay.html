@@ -10,17 +10,22 @@
 <body>
   <div class="panel">
     <header class="drag">
-      <button class="mode no-drag" id="mode" title="Switch mode">MANUAL</button>
+      <div class="modes no-drag" role="tablist">
+        <button id="modeManual" title="Manual: you write the task list and press Start">Manual</button>
+        <button id="modeAuto" title="Auto: Speedrun records which app and tab you're in, nothing to press">Auto</button>
+      </div>
       <span class="run-time mono" id="runTime">0:00</span>
       <span class="pace muted" id="pace"></span>
       <div class="spacer"></div>
       <div class="no-drag tools">
-        <button class="icon" id="importBtn" title="Import task list">⇪</button>
+        <button class="text-btn" id="importBtn" title="Paste a task list from your notes">Import</button>
         <button class="icon" id="dashBtn" title="Dashboard">▦</button>
         <button class="icon" id="settingsBtn" title="Color and opacity">◐</button>
         <button class="icon" id="hideBtn" title="Hide (⌘⇧Space)">—</button>
       </div>
     </header>
+
+    <div class="hint muted small" id="hint"></div>
 
     <section class="current" id="current"></section>
 
@@ -35,8 +40,10 @@
       <div class="swatches" id="swatches"></div>
       <div class="label">Opacity</div>
       <input type="range" id="opacity" min="0.4" max="1" step="0.02" />
+      <div class="label">Modes</div>
+      <div class="muted small"><b>Manual</b>: you write the task list and press Start. The timer runs on the task you're on; Done moves to the next one.<br /><b>Auto</b>: Speedrun records which app and tab you're in and times them for you. Nothing to press.</div>
       <div class="label">Shortcuts</div>
-      <div class="muted small">⌘⇧↩ split · ⌘⇧N add task · ⌘⇧Space show/hide</div>
+      <div class="muted small">⌘⇧↩ done, next task · ⌘⇧N add task · ⌘⇧Space show/hide</div>
     </div>
 
     <div class="modal no-drag" id="importModal" hidden>

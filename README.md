@@ -26,7 +26,9 @@ menu bar menu to have it start with your Mac.
   become tasks and sections.
 - Add a time estimate to any task (`~30m`, `(1h)`, `[45m]` or just `30m`) and watch the delta while
   you work: green while you're under, red once you're over.
-- **Split** (`⌘⇧↩`) finishes the current task and starts the next one. Click any task to switch to it.
+- **Start** starts the timer on the top task (or on an untitled one if the list is empty). **Done**
+  (`⌘⇧↩`) finishes the current task and starts the next one. Click any task to switch to it.
+- **End run** saves the run to the dashboard and gives you a fresh list.
 - Quick-add from the bottom of the timer or with `⌘⇧N`. Start the line with `!` to put it on top.
   Drag tasks to reprioritize.
 - Pick any accent color and adjust the opacity.
@@ -41,6 +43,8 @@ menu bar menu to have it start with your Mac.
   change has held for 1.5 s.
 - Takes a heartbeat screenshot every 30 s and skips it if the screen hasn't changed (perceptual hash).
 - Detects idle (2 minutes without input, screen lock or sleep).
+- The timer shows the app you're in, how long you've been in it, and today's time per app. **Pause**
+  stops recording until you press **Record** again.
 - Coming next: an AI referee that turns these events into named splits and nudges you when you drift.
 
 ## Dashboard

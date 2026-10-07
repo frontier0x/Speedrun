@@ -69,15 +69,23 @@ function renderCurrent() {
   const run = state.run;
 
   if (state.settings.mode === 'auto') {
-    const a = state.activity;
-    box.append(el('div', 'title' + (a ? '' : ' placeholder'), a ? a.app : state.idle ? 'Idle' : 'Watching…'));
+    const a = state.capturing ? state.activity : null;
+    const title = el('div', 'title' + (a ? '' : ' placeholder'));
+    title.append(el('span', 'rec' + (state.capturing && !state.idle ? '' : ' off')));
+    title.append(document.createTextNode(!state.capturing ? 'Recording paused' : a ? a.app : state.idle ? 'Away (idle)' : 'Looking for the active app…'));
+    box.append(title);
     const row = el('div', 'timer-row');
-    row.append(el('div', 'timer mono' + (state.idle ? ' paused' : ''), '0:00'));
+    row.append(el('div', 'timer mono' + (state.idle || !state.capturing ? ' paused' : ''), '0:00'));
+    const controls = el('div', 'controls');
+    const toggle = el('button', state.capturing ? '' : 'primary', state.capturing ? '❚❚ Pause' : '▶ Record');
+    toggle.title = state.capturing ? 'Stop recording for now' : 'Start recording your apps and tabs';
+    toggle.onclick = () => void api.act({ type: 'toggleCapture' });
+    controls.append(toggle);
+    row.append(controls);
     box.append(row);
     if (a?.title) box.append(el('div', 'meta muted', a.title));
-    const missing = permissionNotice();
+    const missing = state.capturing ? permissionNotice() : null;
     if (missing) box.append(missing);
-    else box.append(el('div', 'meta muted small', 'AutoCapture is recording app and tab switches. AI task detection is next.'));
     return;
   }
 
@@ -85,7 +93,7 @@ function renderCurrent() {
   const next = run?.tasks.find((t) => !t.done && !isSection(run, t));
   const shown = active ?? next;
 
-  const title = el('div', 'title' + (shown ? '' : ' placeholder'), shown ? shown.title : run?.tasks.length ? 'All done. GG.' : 'Add your first task below');
+  const title = el('div', 'title' + (shown ? '' : ' placeholder'), shown ? shown.title : run?.tasks.length ? 'All done. GG.' : 'Press Start, or add tasks first');
   if (shown) {
     title.title = 'Double-click to rename';
     title.addEventListener('dblclick', () => {
@@ -115,17 +123,18 @@ function renderCurrent() {
   const row = el('div', 'timer-row');
   const running = Boolean(active && run?.activeSince !== undefined);
   row.append(el('div', 'timer mono' + (running ? '' : ' paused'), '0:00'));
-  if (shown) {
-    const controls = el('div', 'controls');
-    const play = el('button', '', running ? '❚❚' : '▶');
-    play.title = running ? 'Pause' : 'Start';
-    play.onclick = () => (active ? api.act({ type: 'togglePause' }) : api.act({ type: 'start', id: shown.id }));
-    const split = el('button', 'primary', '✓ Split');
-    split.title = 'Finish this task and start the next (⌘⇧↩)';
-    split.onclick = () => (active ? api.act({ type: 'split' }) : api.act({ type: 'toggleDone', id: shown.id }));
-    controls.append(play, split);
-    row.append(controls);
+  const controls = el('div', 'controls');
+  const play = el('button', running ? '' : 'primary', running ? '❚❚ Pause' : '▶ Start');
+  play.title = running ? 'Pause the timer' : 'Start the timer on this task';
+  play.onclick = () => void api.act(active ? { type: 'togglePause' } : shown ? { type: 'start', id: shown.id } : { type: 'startRun' });
+  controls.append(play);
+  if (shown && (active || shown.elapsedMs > 0)) {
+    const split = el('button', running ? 'primary' : '', '✓ Done');
+    split.title = 'Finish this task and start the next one (⌘⇧↩)';
+    split.onclick = () => void api.act(active ? { type: 'split' } : { type: 'toggleDone', id: shown.id });
+    controls.append(split);
   }
+  row.append(controls);
   box.append(row);
 
   if (shown) {
@@ -134,11 +143,22 @@ function renderCurrent() {
     meta.append(el('span', 'delta'));
     const best = golds.get(taskKey(shown.title));
     if (best !== undefined) meta.append(el('span', 'chip gold', '★ best ' + formatDuration(best)));
+    meta.append(endButton());
     box.append(meta);
     const bar = el('div', 'bar');
     bar.append(el('div'));
     box.append(bar);
   }
+}
+
+/** Ends the run: it goes to the dashboard and the list starts fresh. */
+function endButton(): HTMLElement {
+  const b = el('button', 'end', 'End run');
+  b.title = 'Save this run to the dashboard and start a fresh one';
+  const run = state.run;
+  b.hidden = !run?.tasks.length;
+  b.onclick = () => void api.act({ type: 'newRun' });
+  return b;
 }
 
 /** In AutoCapture, say plainly which macOS permission is missing and link straight to it. */
@@ -172,12 +192,45 @@ function permissionNotice(): HTMLElement | null {
 
 let dragId: string | null = null;
 
+function renderApps() {
+  const list = $('list');
+  list.className = 'apps no-drag';
+  list.ondragover = list.ondrop = null;
+  list.replaceChildren();
+  const rows = appTotals(Date.now());
+  if (!rows.length) {
+    list.append(el('li', 'empty', state.capturing ? 'Recorded apps show up here as you switch between them.' : 'Press Record to start.'));
+    return;
+  }
+  const max = rows[0][1];
+  for (const [app, ms] of rows.slice(0, 8)) {
+    const li = el('li');
+    if (state.activity?.app === app && state.capturing) li.classList.add('now');
+    li.append(el('span', 'name', app));
+    const meter = el('span', 'meter');
+    const fill = el('div');
+    fill.style.width = (ms / max) * 100 + '%';
+    meter.append(fill);
+    li.append(meter, el('span', 'time mono muted', formatDuration(ms)));
+    list.append(li);
+  }
+}
+
+/** Today's time per app, including the stretch still running. */
+function appTotals(now: number): [string, number][] {
+  const totals = new Map(state.appTimes);
+  const a = state.activity;
+  if (a && state.capturing && !state.idle) totals.set(a.app, (totals.get(a.app) ?? 0) + Math.max(0, now - a.since));
+  return [...totals].sort((x, y) => y[1] - x[1]);
+}
+
 function renderList() {
   const list = $('list');
+  list.className = 'list no-drag';
   list.replaceChildren();
   const run = state.run;
   if (!run || !run.tasks.length) {
-    list.append(el('li', 'empty', 'Type a task below or import your notes with ⇪'));
+    list.append(el('li', 'empty', 'Type a task below, or click Import to paste a list from your notes.'));
     return;
   }
   // Unfinished first in priority order, finished ones sink to the bottom.
@@ -257,6 +310,8 @@ function row(run: Run, t: Task): HTMLLIElement {
 
 // ---------- live ticking ----------
 
+let lastAppsSecond = 0;
+
 function tick() {
   if (!state) return;
   const now = Date.now();
@@ -264,7 +319,12 @@ function tick() {
   const timer = document.querySelector<HTMLElement>('.timer');
 
   if (state.settings.mode === 'auto') {
-    if (timer) timer.textContent = state.activity ? formatDuration(now - state.activity.since) : '0:00';
+    const a = state.capturing && !state.idle ? state.activity : null;
+    if (timer) timer.textContent = a ? formatDuration(now - a.since) : '0:00';
+    if (Math.floor(now / 1000) !== lastAppsSecond) {
+      lastAppsSecond = Math.floor(now / 1000);
+      renderApps();
+    }
   } else if (run) {
     const active = run.tasks.find((t) => t.id === run.activeTaskId) ?? run.tasks.find((t) => !t.done && !isSection(run, t));
     if (active && timer) {
@@ -291,7 +351,12 @@ function tick() {
     }
   }
 
-  if (run) {
+  if (state.settings.mode === 'auto') {
+    $('runTime').textContent = formatDuration(appTotals(now).reduce((sum, [, ms]) => sum + ms, 0));
+    $('runTime').title = 'Recorded today';
+    $('pace').textContent = '';
+  } else if (run) {
+    $('runTime').title = 'This run so far';
     $('runTime').textContent = formatDuration(runElapsed(run, now));
     const left = projectedRemaining(run, now);
     const finish = new Date(now + left);
@@ -326,17 +391,24 @@ function renderSettings() {
 function render() {
   document.documentElement.style.setProperty('--accent', state.settings.accent);
   golds = new Map(state.golds);
-  const mode = $('mode');
-  mode.textContent = state.settings.mode === 'auto' ? '◉ AUTO' : 'MANUAL';
-  mode.title = state.settings.mode === 'auto' ? 'AutoCapture: watches your apps and tabs. Click for Manual.' : 'Manual: your own task list. Click for AutoCapture.';
+  const auto = state.settings.mode === 'auto';
+  $('modeManual').classList.toggle('on', !auto);
+  $('modeAuto').classList.toggle('on', auto);
+  $('hint').textContent = auto
+    ? 'Auto: records which app and tab you’re in and times them. Nothing to press. Saved on this Mac only.'
+    : state.run?.tasks.length ? '' : 'Manual: write your tasks, press Start, and hit Done when one is finished. The timer moves to the next task.';
+  $('importBtn').hidden = auto;
+  $('addForm').hidden = auto;
   renderCurrent();
-  if (!editing) renderList();
+  if (auto) renderApps();
+  else if (!editing) renderList();
   if (!$('settings').hidden) renderSettings();
   tick();
 }
 
 function wire() {
-  $('mode').onclick = () => void api.act({ type: 'setMode', mode: state.settings.mode === 'auto' ? 'manual' : 'auto' });
+  $('modeManual').onclick = () => void api.act({ type: 'setMode', mode: 'manual' });
+  $('modeAuto').onclick = () => void api.act({ type: 'setMode', mode: 'auto' });
   $('dashBtn').onclick = () => void api.act({ type: 'openDashboard' });
   $('hideBtn').onclick = () => void api.act({ type: 'hideOverlay' });
   $('settingsBtn').onclick = () => {
