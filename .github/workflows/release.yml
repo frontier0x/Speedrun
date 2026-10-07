@@ -1,6 +1,7 @@
 name: Release
 
-# Push a tag like v0.2.0 (or run it by hand) to build Speedrun.dmg and attach it to a GitHub release.
+# Push a tag like v0.2.0, or run it by hand from the Actions tab, to build Speedrun.dmg and attach it to a GitHub release.
+# Run by hand, it tags the commit with the version from package.json first.
 on:
   push:
     tags: ['v*']
@@ -20,6 +21,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Tag the version when run by hand
+        if: github.ref_type != 'tag'
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          if git ls-remote --exit-code --tags origin "$tag" >/dev/null; then
+            echo "$tag already exists"
+          else
+            git tag "$tag"
+            git push origin "$tag"
+          fi
       - run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

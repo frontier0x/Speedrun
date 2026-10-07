@@ -18,6 +18,10 @@ export interface AppState {
   idle: boolean;
   /** macOS permissions AutoCapture needs; both true elsewhere. */
   permissions: { screen: boolean; accessibility: boolean };
+  /** AutoCapture is running (it can be paused). */
+  capturing: boolean;
+  /** Time per app today, longest first, not counting the current stretch. */
+  appTimes: [string, number][];
 }
 
 export type Action =
@@ -28,6 +32,8 @@ export type Action =
   | { type: 'toggleDone'; id: string }
   | { type: 'split' }
   | { type: 'togglePause' }
+  | { type: 'startRun' }
+  | { type: 'toggleCapture' }
   | { type: 'remove'; id: string }
   | { type: 'move'; id: string; beforeId: string | null }
   | { type: 'setEstimate'; id: string; text: string }

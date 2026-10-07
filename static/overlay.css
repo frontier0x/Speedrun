@@ -15,14 +15,26 @@ body { background: transparent; overflow: hidden; }
 .small { font-size: 11px; }
 
 header { display: flex; align-items: center; gap: 8px; padding: 8px 8px 4px 10px; min-height: 34px; }
-.mode {
-  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 2px 7px;
-  color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+.modes { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+.modes button {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border: none; border-radius: 0; background: transparent; color: var(--muted);
 }
+.modes button.on { color: #fff; background: color-mix(in srgb, var(--accent) 70%, transparent); }
+.text-btn { font-size: 11px; padding: 2px 7px; margin-right: 2px; }
+.hint { padding: 0 12px 6px; line-height: 1.35; }
+.hint:empty { display: none; }
+.rec { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ef4444; margin-right: 6px; vertical-align: 1px; animation: rec 1.6s infinite; }
+.rec.off { background: var(--muted); animation: none; }
+@keyframes rec { 50% { opacity: 0.35; } }
+.apps { list-style: none; margin: 0; padding: 4px 10px; overflow-y: auto; flex: 1; border-top: 1px solid var(--line); }
+.apps li { display: flex; gap: 8px; align-items: center; padding: 4px 2px; font-size: 12px; }
+.apps li .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.apps li .meter { width: 60px; height: 4px; border-radius: 4px; background: var(--panel); overflow: hidden; }
+.apps li .meter > div { height: 100%; background: var(--accent); }
+.apps li.now .name { font-weight: 600; }
 .run-time { font-size: 12px; color: var(--muted); }
 .pace { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tools { display: flex; gap: 0; opacity: 0.55; transition: opacity 0.15s; }
+.tools { display: flex; gap: 0; align-items: center; opacity: 0.7; transition: opacity 0.15s; }
 .panel:hover .tools { opacity: 1; }
 
 .current { padding: 2px 12px 10px; }
@@ -31,7 +43,7 @@ header { display: flex; align-items: center; gap: 8px; padding: 8px 8px 4px 10px
   cursor: text;
 }
 .current .title.placeholder { color: var(--muted); font-weight: 500; }
-.timer-row { display: flex; align-items: baseline; gap: 10px; margin-top: 2px; }
+.timer-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 2px; }
 .timer { font-size: clamp(28px, 13vw, 64px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.05; }
 .timer.paused { opacity: 0.5; }
 .timer-row .controls { margin-left: auto; display: flex; gap: 6px; align-self: center; }
@@ -86,7 +98,7 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 .row { display: flex; gap: 6px; align-items: center; }
 
 /* Shrink gracefully: a small window becomes just the timer. */
-@media (max-height: 230px) { .list, .add { display: none; } }
+@media (max-height: 230px) { .list, .add, .apps, .hint { display: none; } }
 @media (max-height: 130px) {
   header .pace, header .run-time { display: none; }
   .meta, .bar { display: none; }
@@ -101,3 +113,7 @@ input[type='range'] { padding: 0; accent-color: var(--accent); }
 .notice-title { font-weight: 600; font-size: 12px; }
 .notice .row { flex-wrap: wrap; }
 .notice button { font-size: 11px; padding: 3px 8px; }
+
+@media (max-width: 330px) { header .pace { display: none; } }
+.end { margin-left: auto; font-size: 11px; padding: 2px 8px; }
+.controls button { white-space: nowrap; }

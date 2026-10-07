@@ -24,6 +24,18 @@ let run: Run | null = null;
 let pastRuns: Run[] = [];
 let activity: Activity | null = null;
 let idle = false;
+let capturing = false;
+/** Time per app today in AutoCapture, so you can see what it has recorded. */
+let appTimes = new Map<string, number>();
+let appTimesDay = new Date().toDateString();
+
+function bankActivity(now: number) {
+  if (new Date(now).toDateString() !== appTimesDay) {
+    appTimes = new Map();
+    appTimesDay = new Date(now).toDateString();
+  }
+  if (activity && !idle) appTimes.set(activity.app, (appTimes.get(activity.app) ?? 0) + Math.max(0, now - activity.since));
+}
 let permissions: Permissions = readPermissions();
 
 let tray: Tray | null = null;
@@ -32,11 +44,15 @@ let dashboard: BrowserWindow | null = null;
 
 const capture = new Capture(dayStore, {
   onActivity: (w, since) => {
+    bankActivity(since);
     activity = { app: w.app, title: w.title, since };
     broadcast();
   },
   onIdle: (v) => {
+    const now = Date.now();
+    if (v) bankActivity(now);
     idle = v;
+    if (!v && activity) activity.since = now;
     broadcast();
   },
   onPermissions: (p) => {
@@ -48,7 +64,8 @@ const capture = new Capture(dayStore, {
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, settings, golds: [...goldSplits(pastRuns)], activity, idle, permissions };
+  const times = [...appTimes].sort((a, b) => b[1] - a[1]);
+  return { run, settings, golds: [...goldSplits(pastRuns)], activity, idle, permissions, capturing, appTimes: times };
 }
 
 function broadcast() {
@@ -79,9 +96,19 @@ function ensureRun(): Run {
   return run;
 }
 
+function setCapturing(on: boolean) {
+  if (on === capturing) return;
+  capturing = on;
+  if (on) capture.start();
+  else {
+    capture.stop();
+    bankActivity(Date.now());
+    activity = null;
+  }
+}
+
 function applyMode() {
-  if (settings.mode === 'auto') capture.start();
-  else capture.stop();
+  setCapturing(settings.mode === 'auto');
 }
 
 async function act(a: Action) {
@@ -111,6 +138,22 @@ async function act(a: Action) {
       break;
     case 'togglePause':
       if (run) run.activeSince !== undefined ? pause(run, now) : resume(run, now);
+      break;
+    case 'startRun': {
+      // Start always works: with nothing on the list yet, time an untitled task you can rename later.
+      const r = ensureRun();
+      if (r.endedAt || !r.tasks.some((t) => !t.done)) {
+        if (r.endedAt) {
+          await act({ type: 'newRun' });
+          return act(a);
+        }
+        addTasks(r, [{ ...parseQuickAdd('Untitled task')!.task }]);
+      }
+      resume(r, now);
+      break;
+    }
+    case 'toggleCapture':
+      setCapturing(!capturing);
       break;
     case 'remove':
       if (run) removeTask(run, a.id, now);
