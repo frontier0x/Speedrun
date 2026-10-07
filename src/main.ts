@@ -1,163 +1,314 @@
-import { app, Menu, nativeImage, powerMonitor, shell, systemPreferences, Tray } from 'electron';
-import { activeWindow } from 'get-windows';
-import { join } from 'node:path';
-import { ChangeTracker } from './detect.js';
-import { hammingDistance, toHex } from './hash.js';
-import { captureScreen } from './screen.js';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, shell, systemPreferences, Tray } from 'electron';
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { Action, Activity, AppState } from './api.js';
+import { Capture } from './capture.js';
+import {
+  addTasks, completeActive, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
+  parseTaskList, pause, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
+} from './runs.js';
+import { RunStore } from './runStore.js';
 import { DayStore } from './store.js';
-import type { CaptureEvent, EventKind, WindowSnapshot } from './types.js';
 
-const POLL_MS = 1000; // cheap window check, no screenshot
-const HEARTBEAT_MS = 30_000; // fallback screenshot while you stay in one place
-const IDLE_AFTER_S = 120;
-const SAME_SCREEN_BITS = 4; // dHash distance at or below this counts as "screen unchanged"
+const here = dirname(fileURLToPath(import.meta.url));
+const staticDir = join(here, '..', 'static');
+const preload = join(here, 'preload.cjs');
 
-const store = new DayStore(join(app.getPath('userData'), 'runs'));
-const tracker = new ChangeTracker();
+const runsRoot = join(app.getPath('userData'), 'runs');
+const dayStore = new DayStore(runsRoot);
+const runStore = new RunStore(runsRoot, join(app.getPath('userData'), 'settings.json'));
+
+let settings: Settings;
+let run: Run | null = null;
+let pastRuns: Run[] = [];
+let activity: Activity | null = null;
+let idle = false;
 
 let tray: Tray | null = null;
-let paused = false;
-let idle = false;
-let lastBounds: Electron.Rectangle | undefined;
-let lastSavedHash: bigint | undefined;
-let lastScreenshotAt = 0;
-let splitStartedAt = Date.now();
-let queue = Promise.resolve();
+let overlay: BrowserWindow | null = null;
+let dashboard: BrowserWindow | null = null;
 
-/** Run captures one at a time so a slow screenshot never overlaps the next event. */
-function enqueue(job: () => Promise<void>) {
-  queue = queue.then(job).catch((err) => console.error('[speedrun]', err));
+const capture = new Capture(dayStore, {
+  onActivity: (w, since) => {
+    activity = { app: w.app, title: w.title, since };
+    broadcast();
+  },
+  onIdle: (v) => {
+    idle = v;
+    broadcast();
+  },
+});
+
+// ---------- state ----------
+
+function state(): AppState {
+  return { run, settings, golds: [...goldSplits(pastRuns)], activity, idle };
 }
 
-async function record(kind: EventKind, window?: WindowSnapshot, opts: { screenshot?: boolean; force?: boolean } = {}) {
-  const event: CaptureEvent = { ts: new Date().toISOString(), kind, window };
-  if (opts.screenshot) {
-    const shot = await captureScreen(lastBounds);
-    lastScreenshotAt = Date.now();
-    if (shot) {
-      event.screenHash = toHex(shot.hash);
-      const same = lastSavedHash !== undefined && hammingDistance(shot.hash, lastSavedHash) <= SAME_SCREEN_BITS;
-      if (same && !opts.force) {
-        event.unchanged = true;
-      } else {
-        event.screenshot = await store.saveScreenshot(shot.jpeg, new Date(event.ts));
-        lastSavedHash = shot.hash;
-      }
-    }
+function broadcast() {
+  const s = state();
+  for (const w of [overlay, dashboard]) if (w && !w.isDestroyed()) w.webContents.send('state', s);
+  refreshTray();
+}
+
+let saveTimer: NodeJS.Timeout | undefined;
+function persist() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    if (run) void runStore.save(run).catch((err) => console.error('[speedrun] save failed', err));
+  }, 300);
+}
+
+let settingsTimer: NodeJS.Timeout | undefined;
+function persistSettings() {
+  clearTimeout(settingsTimer);
+  settingsTimer = setTimeout(() => void runStore.saveSettings(settings), 300);
+}
+
+function ensureRun(): Run {
+  if (!run) {
+    run = newRun(settings.mode);
+    pastRuns = [run, ...pastRuns];
   }
-  await store.append(event);
-  console.log(`[speedrun] ${event.kind}${event.unchanged ? ' (unchanged)' : ''} ${window?.app ?? ''} ${window?.title ?? ''}`);
+  return run;
 }
 
-async function readWindow(): Promise<WindowSnapshot | null> {
-  const w = await activeWindow();
-  if (!w) return null;
-  lastBounds = w.bounds;
-  return {
-    app: w.owner.name,
-    bundleId: 'bundleId' in w.owner ? (w.owner.bundleId as string) : undefined,
-    title: w.title,
-    url: 'url' in w ? (w.url as string | undefined) : undefined,
+function applyMode() {
+  if (settings.mode === 'auto') capture.start();
+  else capture.stop();
+}
+
+async function act(a: Action) {
+  const now = Date.now();
+  switch (a.type) {
+    case 'quickAdd': {
+      const q = parseQuickAdd(a.text);
+      if (q) addTasks(ensureRun(), [q.task], q.urgent);
+      break;
+    }
+    case 'import':
+      addTasks(ensureRun(), parseTaskList(a.text));
+      break;
+    case 'importFile': {
+      const res = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Notes', extensions: ['md', 'txt', 'markdown', 'taskpaper'] }] });
+      if (!res.canceled && res.filePaths[0]) addTasks(ensureRun(), parseTaskList(await readFile(res.filePaths[0], 'utf8')));
+      break;
+    }
+    case 'start':
+      if (run) startTask(run, a.id, now);
+      break;
+    case 'toggleDone':
+      if (run) toggleDone(run, a.id, now);
+      break;
+    case 'split':
+      if (run) completeActive(run, now);
+      break;
+    case 'togglePause':
+      if (run) run.activeSince !== undefined ? pause(run, now) : resume(run, now);
+      break;
+    case 'remove':
+      if (run) removeTask(run, a.id, now);
+      break;
+    case 'move':
+      if (run) moveTask(run, a.id, a.beforeId);
+      break;
+    case 'setEstimate': {
+      const t = run?.tasks.find((x) => x.id === a.id);
+      if (t) t.estimateMs = a.text.trim() ? parseDuration(a.text) ?? t.estimateMs : undefined;
+      break;
+    }
+    case 'rename': {
+      const t = run?.tasks.find((x) => x.id === a.id);
+      if (t && a.title.trim()) t.title = a.title.trim();
+      break;
+    }
+    case 'settings':
+      settings = { ...settings, ...a.patch };
+      if (a.patch.opacity !== undefined) overlay?.setOpacity(settings.opacity);
+      persistSettings();
+      break;
+    case 'setMode':
+      settings = { ...settings, mode: a.mode };
+      if (run) run.mode = a.mode;
+      applyMode();
+      persistSettings();
+      break;
+    case 'newRun':
+      if (run) {
+        pause(run, now);
+        run.endedAt ??= new Date(now).toISOString();
+        await runStore.save(run);
+      }
+      run = null;
+      ensureRun();
+      break;
+    case 'openDashboard':
+      openDashboard();
+      return;
+    case 'hideOverlay':
+      overlay?.hide();
+      buildMenu();
+      return;
+  }
+  persist();
+  broadcast();
+}
+
+// ---------- windows ----------
+
+function createOverlay() {
+  const area = screen.getPrimaryDisplay().workArea;
+  const b = settings.overlayBounds ?? { width: 320, height: 420, x: area.x + area.width - 340, y: area.y + 20 };
+  overlay = new BrowserWindow({
+    ...b,
+    minWidth: 220,
+    minHeight: 72,
+    frame: false,
+    transparent: true,
+    resizable: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: true,
+    fullscreenable: false,
+    show: false,
+    webPreferences: { preload, contextIsolation: true, sandbox: true },
+  });
+  overlay.setAlwaysOnTop(true, 'floating');
+  overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  overlay.setOpacity(settings.opacity);
+  void overlay.loadFile(join(staticDir, 'overlay.html'));
+  overlay.once('ready-to-show', () => overlay?.showInactive());
+
+  let boundsTimer: NodeJS.Timeout | undefined;
+  const saveBounds = () => {
+    clearTimeout(boundsTimer);
+    boundsTimer = setTimeout(() => {
+      if (!overlay || overlay.isDestroyed()) return;
+      settings = { ...settings, overlayBounds: overlay.getBounds() };
+      persistSettings();
+    }, 400);
   };
+  overlay.on('moved', saveBounds);
+  overlay.on('resized', saveBounds);
+  overlay.on('closed', () => (overlay = null));
 }
 
-async function tick() {
-  if (paused) return;
+function toggleOverlay() {
+  if (!overlay) createOverlay();
+  else if (overlay.isVisible()) overlay.hide();
+  else overlay.showInactive();
+  buildMenu();
+}
 
-  const idleSeconds = powerMonitor.getSystemIdleTime();
-  if (!idle && idleSeconds >= IDLE_AFTER_S) {
-    idle = true;
-    enqueue(() => store.append({ ts: new Date().toISOString(), kind: 'idle_start', idleSeconds }));
+function openDashboard() {
+  if (dashboard && !dashboard.isDestroyed()) {
+    dashboard.show();
+    dashboard.focus();
     return;
   }
-  if (idle) {
-    if (idleSeconds >= IDLE_AFTER_S) return;
-    idle = false;
-    enqueue(() => record('idle_end', tracker.current, { screenshot: true, force: true }));
-  }
-
-  const snap = await readWindow();
-  if (snap) {
-    const change = tracker.poll(snap, Date.now());
-    if (change) {
-      if (change.kind !== 'title_change') splitStartedAt = Date.now();
-      enqueue(() => record(change.kind, change.window, { screenshot: true, force: change.kind !== 'title_change' }));
-      return;
-    }
-  }
-
-  if (Date.now() - lastScreenshotAt >= HEARTBEAT_MS) {
-    lastScreenshotAt = Date.now();
-    enqueue(() => record('heartbeat', tracker.current, { screenshot: true }));
-  }
+  dashboard = new BrowserWindow({
+    width: 1100,
+    height: 760,
+    minWidth: 760,
+    minHeight: 520,
+    title: 'Speedrun',
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: '#0d0d12',
+    webPreferences: { preload, contextIsolation: true, sandbox: true },
+  });
+  void dashboard.loadFile(join(staticDir, 'dashboard.html'));
+  dashboard.on('closed', () => (dashboard = null));
+  app.dock?.show();
+  dashboard.on('closed', () => app.dock?.hide());
 }
 
-function formatElapsed(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = String(s % 60).padStart(2, '0');
-  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
-}
+// ---------- tray ----------
 
 function refreshTray() {
   if (!tray) return;
-  if (paused) return tray.setTitle('⏸ paused');
-  if (idle) return tray.setTitle('💤 idle');
-  const appName = (tracker.current?.app ?? '…').slice(0, 18);
-  tray.setTitle(`⏱ ${appName} ${formatElapsed(Date.now() - splitStartedAt)}`);
+  if (idle && settings.mode === 'auto') return tray.setTitle('💤 idle');
+  if (settings.mode === 'auto') {
+    const name = (activity?.app ?? '…').slice(0, 18);
+    return tray.setTitle(`◉ ${name} ${activity ? formatDuration(Date.now() - activity.since) : ''}`);
+  }
+  const active = run?.tasks.find((t) => t.id === run?.activeTaskId);
+  if (!run || !active) return tray.setTitle(run ? `⏱ ${formatDuration(runElapsed(run))}` : '⏱');
+  const icon = run.activeSince !== undefined ? '⏱' : '⏸';
+  tray.setTitle(`${icon} ${active.title.slice(0, 22)} ${formatDuration(liveElapsed(run, active))}`);
 }
 
 function buildMenu() {
   tray?.setContextMenu(
     Menu.buildFromTemplate([
-      { label: paused ? 'Paused' : 'Capturing', enabled: false },
-      {
-        label: paused ? 'Resume' : 'Pause',
-        click: () => {
-          paused = !paused;
-          enqueue(() => store.append({ ts: new Date().toISOString(), kind: paused ? 'pause' : 'resume' }));
-          buildMenu();
-          refreshTray();
-        },
-      },
-      { label: "Open today's log", click: () => shell.openPath(store.dayDir()) },
+      { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Shift+Space', click: toggleOverlay },
+      { label: 'Dashboard', click: openDashboard },
+      { type: 'separator' },
+      { label: 'Manual (task list)', type: 'radio', checked: settings.mode === 'manual', click: () => void act({ type: 'setMode', mode: 'manual' }) },
+      { label: 'AutoCapture', type: 'radio', checked: settings.mode === 'auto', click: () => void act({ type: 'setMode', mode: 'auto' }) },
+      { type: 'separator' },
+      { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
+      { label: 'Start new run', click: () => void act({ type: 'newRun' }) },
+      { label: "Open today's capture log", click: () => void shell.openPath(dayStore.dayDir()) },
       { type: 'separator' },
       { label: 'Quit Speedrun', role: 'quit' },
     ]),
   );
 }
 
+// ---------- boot ----------
+
 app.whenReady().then(async () => {
   app.dock?.hide();
+  settings = await runStore.loadSettings();
+  pastRuns = await runStore.list();
+  const today = new Date().toLocaleDateString('sv-SE');
+  const latest = pastRuns[0];
+  if (latest && !latest.endedAt && new Date(latest.startedAt).toLocaleDateString('sv-SE') === today) run = latest;
+
+  ipcMain.handle('state:get', () => state());
+  ipcMain.handle('act', (_e, a: Action) => act(a));
+  ipcMain.handle('runs:list', async () => {
+    const runs = await runStore.list();
+    if (run && !runs.some((r) => r.id === run!.id)) runs.unshift(run);
+    const merged = runs.map((r) => (run && r.id === run.id ? run : r));
+    return { summaries: merged.map((r) => summarize(r)), runs: merged };
+  });
+
   tray = new Tray(nativeImage.createEmpty());
   buildMenu();
-  refreshTray();
+  createOverlay();
+  applyMode();
 
-  const screenAccess = process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted';
-  if (screenAccess !== 'granted') {
-    console.warn(`[speedrun] Screen Recording permission is "${screenAccess}". Allow it in System Settings › Privacy & Security, then restart.`);
+  if (process.platform === 'darwin' && settings.mode === 'auto') {
+    const screenAccess = systemPreferences.getMediaAccessStatus('screen');
+    if (screenAccess !== 'granted') {
+      console.warn(`[speedrun] Screen Recording permission is "${screenAccess}". Allow it in System Settings › Privacy & Security, then restart.`);
+    }
   }
 
-  // Locking or sleeping counts as idle right away; the next tick with fresh input logs idle_end.
-  const goIdle = () => {
-    if (idle || paused) return;
-    idle = true;
-    enqueue(() => store.append({ ts: new Date().toISOString(), kind: 'idle_start', idleSeconds: 0 }));
-  };
-  powerMonitor.on('lock-screen', goIdle);
-  powerMonitor.on('suspend', goIdle);
+  powerMonitor.on('lock-screen', () => capture.goIdle());
+  powerMonitor.on('suspend', () => capture.goIdle());
 
-  enqueue(() => record('session_start', undefined, { screenshot: true, force: true }));
-  let ticking = false;
-  setInterval(() => {
-    if (ticking) return;
-    ticking = true;
-    tick()
-      .catch((err) => console.error('[speedrun]', err))
-      .finally(() => (ticking = false));
-  }, POLL_MS);
+  globalShortcut.register('CommandOrControl+Shift+Return', () => void act({ type: 'split' }));
+  globalShortcut.register('CommandOrControl+Shift+Space', toggleOverlay);
+  globalShortcut.register('CommandOrControl+Shift+N', () => {
+    if (!overlay) createOverlay();
+    overlay?.show();
+    overlay?.focus();
+    overlay?.webContents.send('focus-add');
+  });
+
   setInterval(refreshTray, 1000);
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  // Bank the running clock so time while the app is closed doesn't count.
+  if (run) {
+    pause(run);
+    runStore.saveSync(run);
+  }
 });
 
 // Menu-bar app: keep running with no windows open.

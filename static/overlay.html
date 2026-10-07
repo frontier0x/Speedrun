@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Speedrun timer</title>
+  <link rel="stylesheet" href="common.css" />
+  <link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+  <div class="panel">
+    <header class="drag">
+      <button class="mode no-drag" id="mode" title="Switch mode">MANUAL</button>
+      <span class="run-time mono" id="runTime">0:00</span>
+      <span class="pace muted" id="pace"></span>
+      <div class="spacer"></div>
+      <div class="no-drag tools">
+        <button class="icon" id="importBtn" title="Import task list">⇪</button>
+        <button class="icon" id="dashBtn" title="Dashboard">▦</button>
+        <button class="icon" id="settingsBtn" title="Color and opacity">◐</button>
+        <button class="icon" id="hideBtn" title="Hide (⌘⇧Space)">—</button>
+      </div>
+    </header>
+
+    <section class="current" id="current"></section>
+
+    <ol class="list no-drag" id="list"></ol>
+
+    <form class="add no-drag" id="addForm">
+      <input id="addInput" placeholder="Add a task… e.g. “Write spec 30m”, “!” puts it on top" autocomplete="off" />
+    </form>
+
+    <div class="popover no-drag" id="settings" hidden>
+      <div class="label">Accent</div>
+      <div class="swatches" id="swatches"></div>
+      <div class="label">Opacity</div>
+      <input type="range" id="opacity" min="0.4" max="1" step="0.02" />
+      <div class="label">Shortcuts</div>
+      <div class="muted small">⌘⇧↩ split · ⌘⇧N add task · ⌘⇧Space show/hide</div>
+    </div>
+
+    <div class="modal no-drag" id="importModal" hidden>
+      <div class="modal-body">
+        <div class="label">Paste your notes</div>
+        <textarea id="importText" rows="9" placeholder="- Write landing copy ~45m&#10;- Build page&#10;  - Hero section 1h&#10;  - Pricing table 30m&#10;- [ ] Reply to emails (15m)"></textarea>
+        <div class="muted small">Bullets, checkboxes, # headings and indentation become sections. Add time with ~30m, (1h), [45m] or just 30m.</div>
+        <div class="row">
+          <button type="button" id="importFile">Open file…</button>
+          <div class="spacer"></div>
+          <button type="button" id="importCancel">Cancel</button>
+          <button type="button" class="primary" id="importGo">Add tasks</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="../dist/renderer/overlay.js"></script>
+</body>
+</html>
