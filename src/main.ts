@@ -67,7 +67,8 @@ function ensureRun(): Run {
 async function endRun(now: number) {
   if (!run) return;
   pause(run, now);
-  endPause(run, now);
+  // A pause still going when you end the session is the time after it, not a break in it.
+  run.pausedSince = undefined;
   run.endedAt ??= new Date(now).toISOString();
   await runStore.save(run);
   finished = run.tasks.length ? run : null;
@@ -312,6 +313,8 @@ app.on('will-quit', () => {
   // Bank the running clock so time while the app is closed doesn't count.
   if (run) {
     pause(run);
+    // Count a pause up to now, but not the time the app is closed (e.g. overnight).
+    endPause(run);
     runStore.saveSync(run);
   }
 });
