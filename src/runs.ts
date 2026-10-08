@@ -1,5 +1,7 @@
 // Pure run/task model shared by the main process, overlay and dashboard. No Node or Electron imports.
 
+import type { ColorKey, Mode as ColorMode, Paint } from './theme.js';
+
 export type Mode = 'manual' | 'auto';
 
 export interface Task {
@@ -39,10 +41,34 @@ export interface Settings {
   countdown: boolean;
   /** Add pauses to the session time. Off: the session clock stops while you pause. */
   pausesCount: boolean;
+  /** Day, night, or follow the Mac. */
+  theme: 'system' | ColorMode;
+  /** Your colors per mode; anything left out uses the default. */
+  colors: Partial<Record<ColorMode, Partial<Record<ColorKey, Paint>>>>;
+  /** Font weight of the big clock, 200–800. */
+  clockWeight: number;
+  /** How much of the clock to show: h:mm:ss.mmm, h:mm:ss or h:mm. */
+  precision: 'ms' | 's' | 'm';
+  /** Size of the floating timer, 1 = normal. */
+  scale: number;
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
-export const DEFAULT_SETTINGS: Settings = { accent: '#e8e8e8', opacity: 0.96, countdown: false, pausesCount: false };
+export const DEFAULT_SETTINGS: Settings = {
+  accent: '#e8e8e8',
+  opacity: 1,
+  countdown: false,
+  pausesCount: false,
+  theme: 'system',
+  colors: {},
+  clockWeight: 400,
+  precision: 'ms',
+  scale: 1,
+};
+
+export const MIN_SCALE = 0.6;
+export const MAX_SCALE = 2;
+export const clampScale = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.round(s * 100) / 100));
 
 export const ACCENTS = ['#e8e8e8', '#7c5cff', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#e5e7eb'];
 
