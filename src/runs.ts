@@ -345,6 +345,8 @@ export interface RunSummary {
   tasksTotal: number;
   /** Share of finished, estimated tasks that came in at or under estimate. */
   onEstimateRate?: number;
+  /** Time saved against your estimates; negative means over. See timeSaved. */
+  savedMs?: number;
 }
 
 export function summarize(run: Run, now = Date.now()): RunSummary {
@@ -361,5 +363,6 @@ export function summarize(run: Run, now = Date.now()): RunSummary {
     tasksDone: leaves.filter((t) => t.done).length,
     tasksTotal: leaves.length,
     onEstimateRate: estimated.length ? estimated.filter((t) => t.elapsedMs <= t.estimateMs!).length / estimated.length : undefined,
+    savedMs: timeSaved(run, now)?.savedMs,
   };
 }
