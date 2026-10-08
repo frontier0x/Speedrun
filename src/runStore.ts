@@ -57,8 +57,8 @@ export class RunStore {
 
   async loadSettings(): Promise<Settings> {
     try {
-      // `mode` is from the old AutoCapture mode, replaced by focusTracking.
-      const { mode: _mode, ...saved } = JSON.parse(await readFile(this.settingsPath, 'utf8'));
+      // `mode` and `focusTracking` are left over from removed tracking features.
+      const { mode: _mode, focusTracking: _focus, ...saved } = JSON.parse(await readFile(this.settingsPath, 'utf8'));
       return { ...DEFAULT_SETTINGS, ...saved };
     } catch {
       return { ...DEFAULT_SETTINGS };

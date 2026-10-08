@@ -13,12 +13,6 @@ export interface Task {
   doneAt?: string;
   /** Tasks with children are sections; their time is the sum of their children. */
   parentId?: string;
-  /** Focus tracking: time split into work, context and distraction while this task ran. */
-  focus?: { work: number; context: number; distraction: number };
-  /** Focus tracking: time per app or site while this task ran. */
-  sources?: Record<string, number>;
-  /** Apps or sites you said belong to this task, so they count as work. */
-  allowed?: string[];
 }
 
 export interface Run {
@@ -37,12 +31,10 @@ export interface Run {
 export interface Settings {
   accent: string;
   opacity: number;
-  /** Notice which app or site you're in while a task runs, and nudge on long distractions. */
-  focusTracking: boolean;
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
-export const DEFAULT_SETTINGS: Settings = { accent: '#e8e8e8', opacity: 0.96, focusTracking: true };
+export const DEFAULT_SETTINGS: Settings = { accent: '#e8e8e8', opacity: 0.96 };
 
 export const ACCENTS = ['#e8e8e8', '#7c5cff', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#e5e7eb'];
 

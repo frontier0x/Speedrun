@@ -18,45 +18,31 @@ menu bar menu to have it start with your Mac.
 
 ## The timer
 
-- A small bar floats above every app, every Space and full-screen windows: the current task, its time,
-  how far you are over or under your estimate, ▶/❚❚ and ✓. Drag it anywhere.
-- ⌄ opens the task list, quick-add, Import and settings. The window is always exactly as tall as what's
-  showing.
-- Click **Import** to paste your notes or open a `.md`/`.txt` file. Bullets, checkboxes, `#` headings and
-  indentation become tasks and sections.
-- Add a time estimate to any task (`~30m`, `(1h)`, `[45m]` or just `30m`): green while you're under,
-  red once you're over.
-- **▶** starts the clock, **✓** (`⌘⇧↩`) finishes the task and starts the next. Click any task to switch
-  to it. **End run** saves the run so the next task starts a fresh one.
-- Gold splits: beat your best time on a task you've done before and it turns gold ★.
+A small panel floats above every app, every Space and full-screen windows. It shows two things: the
+task you're on and a big clock, `0:12:34.567`, in hours, minutes, seconds and milliseconds.
 
-## Focus tracking
+The clock's color tells you how you're doing: white while it runs, green while you're under your
+estimate, red once you're over, grey while paused.
 
-You jump between apps and tabs all the time, and almost none of that is a task switch. So focus
-tracking never decides what you're working on: the task you started is the task. It only sorts each
-moment into one of three buckets:
+Click the clock to open the rest (drag it to move it):
 
-- **Work**: editors, terminals, Figma, Notion, GitHub, Google Docs…
-- **Context**: search, AI chats, docs, Slack, mail, and anything it doesn't know
-- **Distraction**: YouTube, X, Instagram, Reddit, news, shopping…
+- **Estimate**: pick 5m, 10m, 15m, 25m, 45m, 1h, 1h30m or 2h, or type any time. The panel shows how much
+  is left or how far over you are.
+- **Start / Pause** and **Done**. Done (`⌘⇧↩`) finishes the task and starts the next one.
+- **Your list**: click a task to switch to it, drag to reorder, double-click to rename, click its
+  estimate to change it. Finished tasks show their time and how far under or over the estimate they
+  were, in gold if you beat your best time for that task.
+- **Add a task** one at a time (`Write copy 30m` sets a 30-minute estimate, a leading `!` puts it on
+  top), or **Paste a list**: bullets, checkboxes, `#` headings and indentation become tasks and
+  sections, and `30m`, `~30m`, `(1h)` or `[45m]` become estimates.
+- **End run** saves the run, so the next task starts a fresh one.
 
-Short hops never count against you. If one distraction runs past 2 minutes (or distraction takes up
-about a third of the last 10), the bar asks whether you're still on your task: **Back to it**, **Pause**
-or **Part of this task** (that app or site then counts as work for this task). Each task shows its
-work/context/distraction split and top apps and sites, in the timer and on the dashboard.
-
-No screenshots and no AI, just rules. It needs no Screen Recording and no Accessibility permission:
-
-- The app in front comes from macOS, which needs no permission.
-- For the open tab in Chrome, Safari, Arc, Brave, Edge, Vivaldi or Opera, Speedrun asks the browser over
-  AppleScript. macOS shows a one-time "Speedrun wants to control …" prompt per browser. Decline it and
-  that browser simply counts as context. Firefox can't be asked.
-
-Turn it off under ⌄ › Focus or in the menu bar.
+Speedrun doesn't watch your screen, read your apps or send anything anywhere. It's just a timer, and it
+needs no macOS permissions.
 
 ## Dashboard
 
-Open it from the timer (⌄ › Stats) or the menu bar. It shows every previous run with its splits, estimates vs
+Open it from the timer (Stats) or the menu bar. It shows every previous run with its splits, estimates vs
 actuals, best times and sum of best, plus tracked time over the last 14 days, estimate accuracy and
 your streak.
 
@@ -82,15 +68,13 @@ npm start
 Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
 
 - `runs/YYYY-MM-DD/run-*.json`: your task runs
-- `settings.json`: color, opacity, focus tracking and timer position
+- `settings.json`: color, opacity and timer position
 
 ## Roadmap
 
 1. ✅ Floating timer, task import, estimates, dashboard
-2. ✅ Focus tracking without screenshots or extra permissions
-3. Suggest switching tasks when you spend a while in something that clearly belongs to another one
-4. ✅ Packaged Speedrun.app / .dmg
-5. Daily recap
+2. ✅ Packaged Speedrun.app / .dmg
+3. Daily recap
 
 ## Tests and builds
 

@@ -1,7 +1,7 @@
 {
   "name": "speedrun",
   "version": "0.3.0",
-  "description": "Speedrun your day: an open-source, local-first tracker that splits your computer time into tasks.",
+  "description": "Speedrun your day: a floating timer for your task list, with estimates and best times.",
   "license": "MIT",
   "type": "module",
   "main": "dist/main.js",

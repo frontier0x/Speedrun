@@ -1,10 +1,8 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, shell, Tray } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Action, AppState, FocusStatus } from './api.js';
-import { classify, emptyTotals, Nudger, sourceKey } from './focus.js';
-import { FrontmostWatcher, type Sample } from './frontmost.js';
+import type { Action, AppState } from './api.js';
 import {
   addTasks, completeActive, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
   parseTaskList, pause, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
@@ -18,12 +16,7 @@ const preload = join(here, 'preload.cjs');
 const runsRoot = join(app.getPath('userData'), 'runs');
 const runStore = new RunStore(runsRoot, join(app.getPath('userData'), 'settings.json'));
 
-const OVERLAY_WIDTH = 300;
-/** No input for this long and the time stops counting toward focus. */
-const IDLE_AFTER_S = 120;
-/** Speedrun itself in front (clicking the timer) doesn't count as anything. */
-const OWN_APPS = new Set(['Electron', 'Speedrun', 'speedrun']);
-
+const OVERLAY_WIDTH = 340;
 let settings: Settings;
 let run: Run | null = null;
 let pastRuns: Run[] = [];
@@ -32,69 +25,12 @@ let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
 let dashboard: BrowserWindow | null = null;
 
-// ---------- focus tracking ----------
-
-let focusNow: FocusStatus['current'] = null;
-let browserBlocked: string | null = null;
-let lastSampleAt = 0;
-let samplesSinceSave = 0;
-const nudger = new Nudger();
-const watcher = new FrontmostWatcher(onSample);
-
 const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
-
-function onSample(s: Sample) {
-  const now = Date.now();
-  const ms = lastSampleAt ? Math.min(now - lastSampleAt, 5000) : 1000;
-  lastSampleAt = now;
-
-  if (s.browserError && /-1743|not authori[sz]ed/i.test(s.browserError)) browserBlocked = s.app;
-  else if (s.url && browserBlocked === s.app) browserBlocked = null;
-
-  const task = activeTask();
-  if (!run || !task || run.activeSince === undefined) {
-    if (focusNow || nudger.current) {
-      focusNow = null;
-      nudger.reset();
-      broadcast();
-    }
-    return;
-  }
-  if (OWN_APPS.has(s.app) || powerMonitor.getSystemIdleTime() >= IDLE_AFTER_S) return;
-
-  const key = sourceKey(s);
-  const kind = classify(s, task.allowed);
-  task.focus ??= emptyTotals();
-  task.focus[kind] += ms;
-  task.sources ??= {};
-  task.sources[key] = (task.sources[key] ?? 0) + ms;
-  focusNow = { key, kind };
-  nudger.observe(kind, key, ms, now);
-  if (++samplesSinceSave >= 10) {
-    samplesSinceSave = 0;
-    persist();
-  }
-  broadcast();
-}
-
-function applyFocusTracking() {
-  if (settings.focusTracking) watcher.start();
-  else {
-    watcher.stop();
-    focusNow = null;
-    nudger.reset();
-  }
-}
 
 // ---------- state ----------
 
 function state(): AppState {
-  return {
-    run,
-    settings,
-    golds: [...goldSplits(pastRuns)],
-    focus: { current: focusNow, nudge: nudger.current, browserBlocked },
-  };
+  return { run, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))] };
 }
 
 function broadcast() {
@@ -152,19 +88,15 @@ async function act(a: Action) {
     }
     case 'start':
       if (run) startTask(run, a.id, now);
-      nudger.reset();
       break;
     case 'toggleDone':
       if (run) toggleDone(run, a.id, now);
-      nudger.reset();
       break;
     case 'split':
       if (run) completeActive(run, now);
-      nudger.reset();
       break;
     case 'togglePause':
       if (run) run.activeSince !== undefined ? pause(run, now) : resume(run, now);
-      nudger.reset();
       break;
     case 'remove':
       if (run) removeTask(run, a.id, now);
@@ -185,32 +117,22 @@ async function act(a: Action) {
     case 'settings':
       settings = { ...settings, ...a.patch };
       if (a.patch.opacity !== undefined) overlay?.setOpacity(settings.opacity);
-      if (a.patch.focusTracking !== undefined) {
-        applyFocusTracking();
-        buildMenu();
-      }
       persistSettings();
       break;
     case 'endRun':
       await endRun(now);
-      nudger.reset();
       break;
-    case 'nudge': {
-      const task = activeTask();
-      if (a.answer === 'pause' && run) pause(run, now);
-      if (a.answer === 'allow' && task && nudger.current) {
-        task.allowed = [...new Set([...(task.allowed ?? []), nudger.current.key])];
-        nudger.reset();
-      } else nudger.dismiss(now);
-      break;
-    }
-    case 'openAutomationSettings':
-      void shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Automation');
+    case 'moveBy':
+      if (overlay && !overlay.isDestroyed()) {
+        const [x, y] = overlay.getPosition();
+        overlay.setPosition(Math.round(x + a.dx), Math.round(y + a.dy));
+        saveOverlayPosition();
+      }
       return;
     case 'fitHeight':
       if (overlay && !overlay.isDestroyed()) {
         const b = overlay.getBounds();
-        const height = Math.max(40, Math.min(640, Math.ceil(a.height)));
+        const height = Math.max(40, Math.min(720, Math.ceil(a.height)));
         if (b.height !== height) overlay.setBounds({ ...b, height });
       }
       return;
@@ -235,7 +157,7 @@ function createOverlay() {
     x: saved?.x ?? area.x + area.width - OVERLAY_WIDTH - 16,
     y: saved?.y ?? area.y + 12,
     width: OVERLAY_WIDTH,
-    height: 48,
+    height: 96,
     // A panel floats over every app, every Space and full-screen windows, like Spotlight.
     type: 'panel',
     frame: false,
@@ -255,16 +177,18 @@ function createOverlay() {
   void overlay.loadFile(join(staticDir, 'overlay.html'));
   overlay.once('ready-to-show', () => overlay?.showInactive());
 
-  let boundsTimer: NodeJS.Timeout | undefined;
-  overlay.on('moved', () => {
-    clearTimeout(boundsTimer);
-    boundsTimer = setTimeout(() => {
-      if (!overlay || overlay.isDestroyed()) return;
-      settings = { ...settings, overlayBounds: overlay.getBounds() };
-      persistSettings();
-    }, 400);
-  });
+  overlay.on('moved', saveOverlayPosition);
   overlay.on('closed', () => (overlay = null));
+}
+
+let boundsTimer: NodeJS.Timeout | undefined;
+function saveOverlayPosition() {
+  clearTimeout(boundsTimer);
+  boundsTimer = setTimeout(() => {
+    if (!overlay || overlay.isDestroyed()) return;
+    settings = { ...settings, overlayBounds: overlay.getBounds() };
+    persistSettings();
+  }, 400);
 }
 
 function toggleOverlay() {
@@ -302,7 +226,6 @@ function refreshTray() {
   if (!tray) return;
   const active = activeTask();
   if (!run || !active) return tray.setTitle(run ? `⏱ ${formatDuration(runElapsed(run))}` : '⏱');
-  if (nudger.current) return tray.setTitle(`● ${nudger.current.key}`);
   const icon = run.activeSince !== undefined ? '⏱' : '⏸';
   tray.setTitle(`${icon} ${active.title.slice(0, 22)} ${formatDuration(liveElapsed(run, active))}`);
 }
@@ -312,14 +235,6 @@ function buildMenu() {
     Menu.buildFromTemplate([
       { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Shift+Space', click: toggleOverlay },
       { label: 'Dashboard', click: openDashboard },
-      { type: 'separator' },
-      {
-        label: 'Focus tracking',
-        sublabel: 'Notices long distractions while a task runs',
-        type: 'checkbox',
-        checked: settings.focusTracking,
-        click: () => void act({ type: 'settings', patch: { focusTracking: !settings.focusTracking } }),
-      },
       { type: 'separator' },
       { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
       { label: 'End run', click: () => void act({ type: 'endRun' }) },
@@ -368,7 +283,6 @@ app.whenReady().then(async () => {
   tray.setToolTip('Speedrun');
   buildMenu();
   createOverlay();
-  applyFocusTracking();
 
   globalShortcut.register('CommandOrControl+Shift+Return', () => void act({ type: 'split' }));
   globalShortcut.register('CommandOrControl+Shift+Space', toggleOverlay);
@@ -384,7 +298,6 @@ app.whenReady().then(async () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
-  watcher.stop();
   // Bank the running clock so time while the app is closed doesn't count.
   if (run) {
     pause(run);
