@@ -1,5 +1,7 @@
 import type { AppState, SpeedrunApi } from '../api.js';
-import { formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, taskKey, type Run, type Task } from '../runs.js';
+import {
+  formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, runElapsed, taskKey, timeSaved, type Run, type Task,
+} from '../runs.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -87,6 +89,29 @@ function renderFace() {
   const task = $('task');
   task.textContent = t ? t.title : state.run?.tasks.length ? 'All done. GG.' : 'Click to add your first task';
   task.className = 'task' + (t ? '' : ' empty');
+}
+
+// ---------- summary ----------
+
+/** End of a session: the big number is the time you saved (green) or lost (red) against your estimates. */
+function renderSummary(run: Run) {
+  const saved = timeSaved(run);
+  const total = runElapsed(run);
+  const net = saved?.savedMs ?? 0;
+  const [hms, milli] = clockParts(Math.abs(net));
+  $('savedHms').textContent = (net < 0 ? '−' : '+') + hms;
+  $('savedMs').textContent = milli;
+  $('savedClock').className = 'clock ' + (!saved ? 'idle' : net >= 0 ? 'ahead' : 'behind');
+  $('savedLabel').textContent = !saved
+    ? 'Give tasks an estimate to see how much time you save.'
+    : net >= 0
+      ? 'saved against your plan'
+      : 'over your plan';
+  const leaves = run.tasks.filter((t) => !isSection(run, t));
+  $('factTotal').textContent = formatDuration(total);
+  $('factPlanned').textContent = saved ? formatDuration(saved.plannedMs) : '–';
+  $('factActual').textContent = saved ? formatDuration(saved.actualMs) : '–';
+  $('factTasks').textContent = `${leaves.filter((t) => t.done).length}/${leaves.length}`;
 }
 
 // ---------- more ----------
@@ -252,6 +277,21 @@ function frame() {
     else if (t && ms > 0) tone = 'paused';
     clock.className = 'clock ' + tone;
 
+    // Session: all time on this run's tasks, colored by what you've saved or lost so far.
+    const session = $('session');
+    session.hidden = !run?.tasks.length;
+    if (run && !session.hidden) {
+      $('sessionTime').textContent = clockParts(runElapsed(run))[0];
+      const saved = timeSaved(run);
+      const planned = run.tasks.some((t) => t.estimateMs !== undefined);
+      const net = saved?.savedMs ?? 0;
+      const tone = !planned ? '' : net >= 0 ? 'ahead' : 'behind';
+      $('sessionTime').className = 'time ' + (isRunning() ? tone : 'paused');
+      const out = $('sessionSaved');
+      out.textContent = !planned ? '' : !saved ? 'on plan' : net >= 0 ? `${formatDuration(net)} saved` : `${formatDuration(-net)} behind`;
+      out.className = 'saved ' + tone;
+    }
+
     if (isOpen()) {
       const delta = $('delta');
       if (t?.estimateMs !== undefined && ms > 0) {
@@ -268,6 +308,14 @@ function frame() {
 
 function render() {
   golds = new Map(state.golds);
+  const fin = state.finished;
+  $('summary').hidden = !fin;
+  $('face').hidden = Boolean(fin);
+  if (fin) {
+    $('more').hidden = true;
+    renderSummary(fin);
+    return;
+  }
   renderFace();
   if (isOpen()) {
     renderControls();
@@ -357,6 +405,12 @@ function wire() {
   };
 
   $('statsBtn').onclick = () => void api.act({ type: 'openDashboard' });
+  $('summaryStats').onclick = () => void api.act({ type: 'openDashboard' });
+  $('newSession').onclick = async () => {
+    await api.act({ type: 'dismissSummary' });
+    setOpen(true);
+    $('addInput').focus();
+  };
   $('endBtn').onclick = () => void api.act({ type: 'endRun' });
   $('hideBtn').onclick = () => void api.act({ type: 'hideOverlay' });
 

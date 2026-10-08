@@ -24,6 +24,11 @@ task you're on and a big clock, `0:12:34.567`, in hours, minutes, seconds and mi
 The clock's color tells you how you're doing: white while it runs, green while you're under your
 estimate, red once you're over, grey while paused.
 
+Under it sits the **session clock**: all the time you've spent on this session's tasks. It is green while
+you're on or under your plan and red once you're behind, with the time saved or lost next to it. When you
+finish the last task or click End session, the panel shows the total time you saved (or lost) against
+your estimates, then New session starts a fresh list.
+
 Click the clock to open the rest (drag it to move it):
 
 - **Estimate**: pick 5m, 10m, 15m, 25m, 45m, 1h, 1h30m or 2h, or type any time. The panel shows how much

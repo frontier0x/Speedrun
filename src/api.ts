@@ -3,6 +3,8 @@ import type { Run, RunSummary, Settings } from './runs.js';
 
 export interface AppState {
   run: Run | null;
+  /** The session that just ended, shown as a summary until you dismiss it or start a new one. */
+  finished: Run | null;
   settings: Settings;
   /** Best time per task title (see taskKey), from finished runs. */
   golds: [string, number][];
@@ -25,7 +27,8 @@ export type Action =
   | { type: 'fitHeight'; height: number }
   | { type: 'moveBy'; dx: number; dy: number }
   | { type: 'openDashboard' }
-  | { type: 'hideOverlay' };
+  | { type: 'hideOverlay' }
+  | { type: 'dismissSummary' };
 
 export interface SpeedrunApi {
   getState(): Promise<AppState>;
