@@ -9,57 +9,45 @@
 </head>
 <body>
   <div class="panel" id="panel">
-    <div class="bar drag">
-      <span class="dot" id="dot"></span>
-      <span class="task" id="task"></span>
-      <span class="delta mono" id="delta"></span>
-      <span class="time mono" id="time">0:00</span>
-      <div class="ctl no-drag">
-        <button class="ic" id="play" title="Start">▶</button>
-        <button class="ic" id="split" title="Done, next task (⌘⇧↩)">✓</button>
-        <button class="ic" id="expand" title="Tasks and settings">⌄</button>
+    <!-- Always visible: the current task and the clock. Click to open, drag to move. -->
+    <div class="face" id="face" title="Click for tasks · drag to move">
+      <div class="face-top">
+        <span class="task" id="task"></span>
+        <span class="est mono" id="est"></span>
       </div>
-      <div class="progress"><div id="progress"></div></div>
+      <div class="clock mono" id="clock"><span id="clockMain">0:00:00</span><span class="ms" id="clockMs">.000</span></div>
+      <div class="quick">
+        <button class="round" id="play" title="Start">▶</button>
+        <button class="round" id="split" title="Done, next task (⌘⇧↩)">✓</button>
+      </div>
+      <div class="progress" id="progressTrack"><div id="progress"></div></div>
     </div>
 
-    <div class="nudge no-drag" id="nudge" hidden>
-      <div id="nudgeText"></div>
-      <div class="links">
-        <button class="link" data-answer="back">Back to it</button>
-        <button class="link" data-answer="pause">Pause</button>
-        <button class="link" data-answer="allow">Part of this task</button>
-      </div>
-    </div>
+    <div class="more" id="more" hidden>
+      <section class="current" id="current">
+        <div class="row">
+          <button class="primary" id="playBig">▶ Start</button>
+          <button id="doneBig" title="Finish this task and start the next (⌘⇧↩)">✓ Done</button>
+          <span class="spacer"></span>
+          <span class="delta mono" id="delta"></span>
+        </div>
+        <label class="field">
+          <span>Estimate for this task</span>
+          <input id="estInput" placeholder="e.g. 30m, 1h 15m" autocomplete="off" />
+        </label>
+      </section>
 
-    <div class="more no-drag" id="more" hidden>
-      <div class="focus" id="focus"></div>
       <ol class="list" id="list"></ol>
-      <form class="add" id="addForm">
-        <input id="addInput" placeholder="Add a task  ·  e.g. Write copy 30m" autocomplete="off" />
+
+      <form class="field add" id="addForm">
+        <label for="addInput">Add tasks</label>
+        <input id="addInput" placeholder="Write copy 30m  ·  or paste a whole list" autocomplete="off" />
       </form>
 
-      <div class="import" id="import" hidden>
-        <textarea id="importText" rows="7" placeholder="- Write landing copy ~45m&#10;- Build page&#10;  - Hero section 1h&#10;- [ ] Reply to emails (15m)"></textarea>
-        <div class="links">
-          <button class="link" id="importFile" type="button">Open file…</button>
-          <span class="spacer"></span>
-          <button class="link" id="importCancel" type="button">Cancel</button>
-          <button class="link strong" id="importGo" type="button">Add tasks</button>
-        </div>
-      </div>
-
-      <div class="look" id="look" hidden>
-        <div class="swatches" id="swatches"></div>
-        <input type="range" id="opacity" min="0.4" max="1" step="0.02" title="Opacity" />
-      </div>
-
-      <div class="foot links">
-        <button class="link" id="importBtn">Import</button>
-        <button class="link" id="focusBtn"></button>
-        <button class="link" id="lookBtn">Look</button>
+      <div class="foot">
         <button class="link" id="dashBtn">Stats</button>
+        <button class="link" id="endBtn" title="Save this run to Stats and start a fresh one">End run</button>
         <span class="spacer"></span>
-        <button class="link" id="endBtn">End run</button>
         <button class="link" id="hideBtn" title="Hide (⌘⇧Space)">Hide</button>
       </div>
     </div>

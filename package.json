@@ -1,6 +1,6 @@
 {
   "name": "speedrun",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Speedrun your day: an open-source, local-first tracker that splits your computer time into tasks.",
   "license": "MIT",
   "type": "module",
@@ -56,9 +56,7 @@
       ],
       "identity": "-",
       "hardenedRuntime": false,
-      "extendInfo": {
-        "NSAppleEventsUsageDescription": "Speedrun asks your browser for the current tab’s address, so it can tell work from distractions. Nothing leaves your Mac."
-      }
+      "extendInfo": {}
     },
     "dmg": {
       "title": "Speedrun"

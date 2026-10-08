@@ -13,12 +13,6 @@ export interface Task {
   doneAt?: string;
   /** Tasks with children are sections; their time is the sum of their children. */
   parentId?: string;
-  /** Focus tracking: time split into work, context and distraction while this task ran. */
-  focus?: { work: number; context: number; distraction: number };
-  /** Focus tracking: time per app or site while this task ran. */
-  sources?: Record<string, number>;
-  /** Apps or sites you said belong to this task, so they count as work. */
-  allowed?: string[];
 }
 
 export interface Run {
@@ -37,12 +31,10 @@ export interface Run {
 export interface Settings {
   accent: string;
   opacity: number;
-  /** Notice which app or site you're in while a task runs, and nudge on long distractions. */
-  focusTracking: boolean;
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
-export const DEFAULT_SETTINGS: Settings = { accent: '#e8e8e8', opacity: 0.96, focusTracking: true };
+export const DEFAULT_SETTINGS: Settings = { accent: '#e8e8e8', opacity: 0.96 };
 
 export const ACCENTS = ['#e8e8e8', '#7c5cff', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#e5e7eb'];
 
@@ -78,6 +70,18 @@ export function formatDuration(ms: number, opts: { signed?: boolean; tenths?: bo
   const pad = (n: number) => String(n).padStart(2, '0');
   const tenths = opts.tenths ? '.' + Math.floor((abs % 1000) / 100) : '';
   return sign + (h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`) + tenths;
+}
+
+/** The big timer: always hours, minutes, seconds and milliseconds, e.g. "0:04:07.250". */
+export function formatClock(ms: number): { main: string; ms: string } {
+  const abs = Math.max(0, Math.floor(ms));
+  const totalS = Math.floor(abs / 1000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const h = Math.floor(totalS / 3600);
+  return {
+    main: `${h}:${pad(Math.floor((totalS % 3600) / 60))}:${pad(totalS % 60)}`,
+    ms: '.' + String(abs % 1000).padStart(3, '0'),
+  };
 }
 
 /** Short human estimate label, e.g. "25m", "1h 30m". */
