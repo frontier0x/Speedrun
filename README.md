@@ -6,8 +6,11 @@ best times.
 
 ## Install
 
-1. Download the latest `Speedrun-…-arm64.dmg` (Apple Silicon) or `Speedrun-….dmg` (Intel) from
-   [Releases](https://github.com/frontier0x/speedrun/releases/latest).
+1. Download the newest Speedrun for your Mac (Apple menu › About This Mac shows which chip you have):
+   - **[Speedrun for Apple Silicon](https://github.com/frontier0x/speedrun/releases/latest/download/Speedrun-Apple-Silicon.dmg)** (M1 or newer)
+   - **[Speedrun for Intel](https://github.com/frontier0x/speedrun/releases/latest/download/Speedrun-Intel.dmg)**
+
+   These links always get the latest version. Older ones are on [Releases](https://github.com/frontier0x/speedrun/releases).
 2. Open it and drag **Speedrun** into **Applications**.
 3. The first time, macOS says "Speedrun" Not Opened because the app isn't notarized by Apple yet. Click
    **Done**, then go to System Settings › Privacy & Security, scroll down and click **Open Anyway**.

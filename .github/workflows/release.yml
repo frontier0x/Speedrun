@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v0.2.0, or run it by hand from the Actions tab, to build Speedrun.dmg and attach it to a GitHub release.
+# Push a tag like v0.2.0, or run it by hand from the Actions tab, to build the .dmg files and attach them to a GitHub release.
 # Run by hand, it tags the commit with the version from package.json first.
 on:
   push:
@@ -39,7 +39,12 @@ jobs:
         run: |
           tag="v$(node -p "require('./package.json').version")"
           shopt -s nullglob
+          # Plain names that say which Mac they're for and never change, so
+          # releases/latest/download/Speedrun-Apple-Silicon.dmg always gets the newest one.
+          # (The zips keep electron-builder's names; latest-mac.yml points at them for updates.)
+          mv "release/Speedrun-${tag#v}-arm64.dmg" release/Speedrun-Apple-Silicon.dmg
+          mv "release/Speedrun-${tag#v}.dmg" release/Speedrun-Intel.dmg
           files=(release/*.dmg release/*.zip release/latest-mac.yml)
           gh release create "$tag" --verify-tag --title "Speedrun ${tag#v}" \
-            --notes "Download **Speedrun-${tag#v}-arm64.dmg** for Apple Silicon Macs (M1 and newer) or **Speedrun-${tag#v}.dmg** for Intel Macs. Open it, drag Speedrun into Applications, then the first time click Done on the warning and use Open Anyway in System Settings › Privacy & Security." \
+            --notes "Download **Speedrun-Apple-Silicon.dmg** for Macs with an M1 or newer chip, or **Speedrun-Intel.dmg** for older Intel Macs (Apple menu › About This Mac shows which you have). Open it, drag Speedrun into Applications, then the first time click Done on the warning and use Open Anyway in System Settings › Privacy & Security." \
             "${files[@]}"
