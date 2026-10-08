@@ -162,6 +162,7 @@ function renderDetail() {
   stat(formatDuration(runElapsed(run)), 'total time');
   if (s.estimateMs !== undefined) stat(formatEstimate(s.estimateMs), 'estimated');
   stat(`${s.tasksDone}/${s.tasksTotal}`, 'tasks done');
+  if (s.pausedMs >= 1000) stat(formatDuration(s.pausedMs), 'paused');
   if (s.savedMs !== undefined) stat(formatDuration(Math.abs(s.savedMs)), s.savedMs >= 0 ? 'saved vs. plan' : 'over plan');
   if (s.onEstimateRate !== undefined) stat(Math.round(s.onEstimateRate * 100) + '%', 'on estimate');
   if (sob !== undefined) stat(formatDuration(sob), 'sum of best');

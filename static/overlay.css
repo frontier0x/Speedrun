@@ -47,13 +47,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--clock); out
 .session .ahead { color: var(--ahead); }
 .session .behind { color: var(--behind); }
 .session .saved { font-size: 12px; font-weight: 500; }
+.session .saved.paused { color: var(--dim); }
 
 /* ---------- summary ---------- */
 .summary { padding: 14px 18px 14px; display: flex; flex-direction: column; gap: 4px; }
 .summary .clock.ahead { color: var(--ahead); }
 .summary .clock.behind { color: var(--behind); }
 .saved-label { font-size: 13px; color: var(--dim); margin-bottom: 8px; }
-.facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 12px; padding-top: 10px; border-top: 1px solid var(--faint); }
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; padding-top: 10px; border-top: 1px solid var(--faint); }
 .facts dt { font-size: 11px; color: var(--dim); }
 .facts dd { margin: 2px 0 0; font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; color: #d6d6d1; }
 
@@ -120,5 +121,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--clock); out
 button.text { padding: 0; border: none; background: none; font-size: 12px; color: var(--dim); }
 button.text:hover { color: var(--clock); background: none; }
 .foot { padding-top: 2px; }
+
+.settings { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--faint); }
+.toggle { display: flex; gap: 10px; align-items: flex-start; font-size: 12px; color: var(--dim); cursor: pointer; }
+.toggle b { display: block; font-weight: 500; color: #d6d6d1; margin-bottom: 1px; }
+.toggle input { width: auto; margin: 2px 0 0; accent-color: var(--ahead); }
 
 @media (prefers-reduced-motion: reduce) { .clock { transition: none; } }

@@ -29,11 +29,16 @@ you're on or under your plan and red once you're behind, with the time saved or 
 finish the last task or click End session, the panel shows the total time you saved (or lost) against
 your estimates, then New session starts a fresh list.
 
+Pausing stops both clocks and counts the pause; the summary shows how long you paused. Under Settings in
+the open panel you can turn on **Countdown** (the task clock counts down from your estimate, then into
+the red with a minus) and **Count pauses in the session** (off by default, so pauses don't add to the
+session time).
+
 Click the clock to open the rest (drag it to move it):
 
 - **Estimate**: pick 5m, 10m, 15m, 25m, 45m, 1h, 1h30m or 2h, or type any time. The panel shows how much
   is left or how far over you are.
-- **Start / Pause** and **Done**. Done (`⌘⇧↩`) finishes the task and starts the next one.
+- **Start / Pause** (`⌘⇧Space`) and **Done**. Done (`⌘⇧↩`) finishes the task and starts the next one.
 - **Your list**: click a task to switch to it, drag to reorder, double-click to rename, click its
   estimate to change it. Finished tasks show their time and how far under or over the estimate they
   were, in gold if you beat your best time for that task.
@@ -55,9 +60,10 @@ your streak.
 
 | Shortcut | Action |
 | --- | --- |
+| `⌘⇧Space` | Go / Pause, from any app |
 | `⌘⇧↩` | Split: finish the current task, start the next |
 | `⌘⇧N` | Add a task |
-| `⌘⇧Space` | Show or hide the timer |
+| `⌥⇧⌘Space` | Show or hide the timer |
 
 ## Run it
 

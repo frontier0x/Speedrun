@@ -28,9 +28,10 @@
       <div class="saved-label" id="savedLabel"></div>
       <dl class="facts">
         <div><dt>Session</dt><dd id="factTotal"></dd></div>
+        <div><dt>Pauses</dt><dd id="factPaused"></dd></div>
+        <div><dt>Tasks</dt><dd id="factTasks"></dd></div>
         <div><dt>Planned</dt><dd id="factPlanned"></dd></div>
         <div><dt>Actual</dt><dd id="factActual"></dd></div>
-        <div><dt>Tasks</dt><dd id="factTasks"></dd></div>
       </dl>
       <div class="row">
         <button class="text" id="summaryStats" type="button">Stats</button>
@@ -47,7 +48,7 @@
       <div class="picker" id="picker" hidden></div>
 
       <div class="actions" id="actions">
-        <button class="act primary" id="play" type="button"></button>
+        <button class="act primary" id="play" type="button" title="Go / Pause (⌘⇧Space)"></button>
         <button class="act" id="done" type="button" title="Finish this task and start the next (⌘⇧↩)">Done</button>
       </div>
 
@@ -67,12 +68,20 @@
         </div>
       </div>
 
+      <div class="settings" id="settings" hidden>
+        <label class="toggle"><input type="checkbox" id="setCountdown" />
+          <span><b>Countdown</b>The task clock counts down from your estimate, then into the red.</span></label>
+        <label class="toggle"><input type="checkbox" id="setPauses" />
+          <span><b>Count pauses in the session</b>Off: the session clock stops while you pause.</span></label>
+      </div>
+
       <footer class="row foot">
         <button class="text" id="pasteBtn" type="button">Paste a list</button>
         <button class="text" id="statsBtn" type="button">Stats</button>
+        <button class="text" id="settingsBtn" type="button">Settings</button>
         <span class="spacer"></span>
         <button class="text" id="endBtn" type="button" title="Stop the clock and see what you saved">End session</button>
-        <button class="text" id="hideBtn" type="button" title="Hide (⌘⇧Space)">Hide</button>
+        <button class="text" id="hideBtn" type="button" title="Hide (⌥⇧⌘Space)">Hide</button>
       </footer>
     </section>
   </main>

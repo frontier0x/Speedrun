@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
-  addTasks, completeActive, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
+  addTasks, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
   parseTaskList, pause, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
 } from './runs.js';
 import { RunStore } from './runStore.js';
@@ -67,6 +67,7 @@ function ensureRun(): Run {
 async function endRun(now: number) {
   if (!run) return;
   pause(run, now);
+  endPause(run, now);
   run.endedAt ??= new Date(now).toISOString();
   await runStore.save(run);
   finished = run.tasks.length ? run : null;
@@ -241,7 +242,7 @@ function refreshTray() {
 function buildMenu() {
   tray?.setContextMenu(
     Menu.buildFromTemplate([
-      { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Shift+Space', click: toggleOverlay },
+      { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Alt+Shift+Space', click: toggleOverlay },
       { label: 'Dashboard', click: openDashboard },
       { type: 'separator' },
       { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
@@ -293,7 +294,9 @@ app.whenReady().then(async () => {
   createOverlay();
 
   globalShortcut.register('CommandOrControl+Shift+Return', () => void act({ type: 'split' }));
-  globalShortcut.register('CommandOrControl+Shift+Space', toggleOverlay);
+  // Space is play/pause everywhere; with ⌘⇧ it works from any app. Starts the next task if none is running.
+  globalShortcut.register('CommandOrControl+Shift+Space', () => void act({ type: 'togglePause' }));
+  globalShortcut.register('CommandOrControl+Alt+Shift+Space', toggleOverlay);
   globalShortcut.register('CommandOrControl+Shift+N', () => {
     if (!overlay) createOverlay();
     overlay?.show();
