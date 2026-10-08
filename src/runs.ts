@@ -72,18 +72,6 @@ export function formatDuration(ms: number, opts: { signed?: boolean; tenths?: bo
   return sign + (h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`) + tenths;
 }
 
-/** The big timer: always hours, minutes, seconds and milliseconds, e.g. "0:04:07.250". */
-export function formatClock(ms: number): { main: string; ms: string } {
-  const abs = Math.max(0, Math.floor(ms));
-  const totalS = Math.floor(abs / 1000);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const h = Math.floor(totalS / 3600);
-  return {
-    main: `${h}:${pad(Math.floor((totalS % 3600) / 60))}:${pad(totalS % 60)}`,
-    ms: '.' + String(abs % 1000).padStart(3, '0'),
-  };
-}
-
 /** Short human estimate label, e.g. "25m", "1h 30m". */
 export function formatEstimate(ms: number): string {
   const totalM = Math.round(ms / 60_000);

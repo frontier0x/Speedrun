@@ -16,8 +16,7 @@ const preload = join(here, 'preload.cjs');
 const runsRoot = join(app.getPath('userData'), 'runs');
 const runStore = new RunStore(runsRoot, join(app.getPath('userData'), 'settings.json'));
 
-const OVERLAY_WIDTH = 300;
-
+const OVERLAY_WIDTH = 340;
 let settings: Settings;
 let run: Run | null = null;
 let pastRuns: Run[] = [];
@@ -31,11 +30,7 @@ const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 // ---------- state ----------
 
 function state(): AppState {
-  return {
-    run,
-    settings,
-    golds: [...goldSplits(pastRuns)],
-  };
+  return { run, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))] };
 }
 
 function broadcast() {
@@ -127,23 +122,18 @@ async function act(a: Action) {
     case 'endRun':
       await endRun(now);
       break;
-    case 'fitHeight':
-      if (overlay && !overlay.isDestroyed()) {
-        const b = overlay.getBounds();
-        const height = Math.max(40, Math.min(640, Math.ceil(a.height)));
-        if (b.height !== height) overlay.setBounds({ ...b, height });
-      }
-      return;
     case 'moveBy':
       if (overlay && !overlay.isDestroyed()) {
         const [x, y] = overlay.getPosition();
         overlay.setPosition(Math.round(x + a.dx), Math.round(y + a.dy));
+        saveOverlayPosition();
       }
       return;
-    case 'savePosition':
+    case 'fitHeight':
       if (overlay && !overlay.isDestroyed()) {
-        settings = { ...settings, overlayBounds: overlay.getBounds() };
-        persistSettings();
+        const b = overlay.getBounds();
+        const height = Math.max(40, Math.min(720, Math.ceil(a.height)));
+        if (b.height !== height) overlay.setBounds({ ...b, height });
       }
       return;
     case 'openDashboard':
@@ -167,7 +157,7 @@ function createOverlay() {
     x: saved?.x ?? area.x + area.width - OVERLAY_WIDTH - 16,
     y: saved?.y ?? area.y + 12,
     width: OVERLAY_WIDTH,
-    height: 48,
+    height: 96,
     // A panel floats over every app, every Space and full-screen windows, like Spotlight.
     type: 'panel',
     frame: false,
@@ -187,16 +177,18 @@ function createOverlay() {
   void overlay.loadFile(join(staticDir, 'overlay.html'));
   overlay.once('ready-to-show', () => overlay?.showInactive());
 
-  let boundsTimer: NodeJS.Timeout | undefined;
-  overlay.on('moved', () => {
-    clearTimeout(boundsTimer);
-    boundsTimer = setTimeout(() => {
-      if (!overlay || overlay.isDestroyed()) return;
-      settings = { ...settings, overlayBounds: overlay.getBounds() };
-      persistSettings();
-    }, 400);
-  });
+  overlay.on('moved', saveOverlayPosition);
   overlay.on('closed', () => (overlay = null));
+}
+
+let boundsTimer: NodeJS.Timeout | undefined;
+function saveOverlayPosition() {
+  clearTimeout(boundsTimer);
+  boundsTimer = setTimeout(() => {
+    if (!overlay || overlay.isDestroyed()) return;
+    settings = { ...settings, overlayBounds: overlay.getBounds() };
+    persistSettings();
+  }, 400);
 }
 
 function toggleOverlay() {

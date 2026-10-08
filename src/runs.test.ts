@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  addTasks, completeActive, formatClock, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
+  addTasks, completeActive, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
   totalEstimate,
 } from './runs.js';
@@ -98,10 +98,4 @@ test('gold splits keep the best time per task across runs', () => {
   r2.tasks[0].done = true;
   r2.tasks[0].elapsedMs = 12 * MIN;
   assert.equal(goldSplits([r1, r2]).get('inbox zero'), 12 * MIN);
-});
-
-test('the big timer always shows hours, minutes, seconds and milliseconds', () => {
-  assert.deepEqual(formatClock(0), { main: '0:00:00', ms: '.000' });
-  assert.deepEqual(formatClock(4 * MIN + 7250), { main: '0:04:07', ms: '.250' });
-  assert.deepEqual(formatClock(2 * 60 * MIN + 5), { main: '2:00:00', ms: '.005' });
 });

@@ -23,9 +23,7 @@ export type Action =
   | { type: 'settings'; patch: Partial<Settings> }
   | { type: 'endRun' }
   | { type: 'fitHeight'; height: number }
-  /** Drag the frameless timer by hand, so a click on it can still mean "open". */
   | { type: 'moveBy'; dx: number; dy: number }
-  | { type: 'savePosition' }
   | { type: 'openDashboard' }
   | { type: 'hideOverlay' };
 

@@ -1,14 +1,15 @@
 import type { AppState, SpeedrunApi } from '../api.js';
-import {
-  formatClock, formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, totalElapsed, type Run, type Task,
-} from '../runs.js';
+import { formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, taskKey, type Run, type Task } from '../runs.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
+const ESTIMATE_PRESETS = ['5m', '10m', '15m', '25m', '45m', '1h', '1h30m', '2h'];
+
 let state: AppState;
-let open = false;
-let editing = false; // don't rebuild the list under an open inline editor
+let golds = new Map<string, number>();
+let editing = false; // hold list re-renders while an inline editor is open
+let pickerFor: string | null = null; // task whose estimate picker is open in the list
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -17,48 +18,104 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return e;
 }
 
-/** The task the clock belongs to: the running one, else the next one up. */
-function shownTask(run: Run | null): Task | undefined {
+/** 1:02:03 and .456, the clock's two parts. Hours always show, so the width never jumps. */
+function clockParts(ms: number): [string, string] {
+  const total = Math.max(0, Math.floor(ms));
+  const h = Math.floor(total / 3_600_000);
+  const m = Math.floor((total % 3_600_000) / 60_000);
+  const s = Math.floor((total % 60_000) / 1000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return [`${h}:${pad(m)}:${pad(s)}`, '.' + String(total % 1000).padStart(3, '0')];
+}
+
+/** The task on the clock: the running one, or the next one up. */
+function currentTask(): Task | undefined {
+  const run = state.run;
   if (!run) return undefined;
   return run.tasks.find((t) => t.id === run.activeTaskId) ?? run.tasks.find((t) => !t.done && !isSection(run, t));
 }
 
-const running = () => Boolean(state.run?.activeTaskId && state.run.activeSince !== undefined);
+const isRunning = () => Boolean(state.run?.activeTaskId && state.run.activeSince !== undefined);
+const isOpen = () => !$('more').hidden;
+
+// ---------- estimate picker ----------
+
+/** Preset chips plus a free field. Used under the clock and under a task in the list. */
+function estimatePicker(t: Task, onDone: () => void): HTMLElement {
+  const box = el('div', 'picker');
+  const set = (text: string) => {
+    onDone();
+    void api.act({ type: 'setEstimate', id: t.id, text });
+  };
+  const currentText = t.estimateMs !== undefined ? formatEstimate(t.estimateMs).replace(' ', '') : '';
+  for (const p of ESTIMATE_PRESETS) {
+    const b = el('button', p === currentText ? 'on' : '', p);
+    b.type = 'button';
+    b.onclick = (e) => {
+      e.stopPropagation();
+      set(p);
+    };
+    box.append(b);
+  }
+  const custom = el('input');
+  custom.placeholder = 'other';
+  custom.title = 'Any time, e.g. 20m, 1h15m, 90s';
+  custom.onclick = (e) => e.stopPropagation();
+  custom.onfocus = () => (editing = true);
+  custom.onblur = () => (editing = false);
+  custom.onkeydown = (k) => {
+    if (k.key === 'Enter' && custom.value.trim()) set(custom.value);
+    if (k.key === 'Escape') onDone();
+  };
+  box.append(custom);
+  if (t.estimateMs !== undefined) {
+    const clear = el('button', 'clear', 'clear');
+    clear.type = 'button';
+    clear.onclick = (e) => {
+      e.stopPropagation();
+      set('');
+    };
+    box.append(clear);
+  }
+  return box;
+}
 
 // ---------- face ----------
 
 function renderFace() {
-  const t = shownTask(state.run);
+  const t = currentTask();
   const task = $('task');
   task.textContent = t ? t.title : state.run?.tasks.length ? 'All done. GG.' : 'Click to add your first task';
-  task.classList.toggle('on', Boolean(t));
-  $('est').textContent = t?.estimateMs !== undefined ? 'est ' + formatEstimate(t.estimateMs) : '';
-
-  const play = $('play');
-  play.textContent = running() ? '❚❚' : '▶';
-  play.title = running() ? 'Pause' : 'Start';
-  $('split').hidden = !t;
-
-  const big = $('playBig');
-  big.textContent = running() ? '❚❚ Pause' : '▶ Start';
-  big.className = running() ? '' : 'primary';
-  $('current').hidden = !t;
-  const est = $<HTMLInputElement>('estInput');
-  if (document.activeElement !== est) est.value = t?.estimateMs !== undefined ? formatEstimate(t.estimateMs).replace(' ', '') : '';
+  task.className = 'task' + (t ? '' : ' empty');
 }
 
-function togglePlay() {
-  const run = state.run;
-  const t = shownTask(run);
-  if (!t) {
-    setOpen(true);
-    $('addInput').focus();
-    return;
-  }
-  void api.act(run?.activeTaskId ? { type: 'togglePause' } : { type: 'start', id: t.id });
+// ---------- more ----------
+
+function renderControls() {
+  const t = currentTask();
+  const running = isRunning();
+
+  const est = $('estimate');
+  est.hidden = !t;
+  est.textContent = t?.estimateMs !== undefined ? `Estimate ${formatEstimate(t.estimateMs)}` : 'Set an estimate';
+  est.className = 'estimate' + (t?.estimateMs !== undefined ? '' : ' unset');
+
+  const picker = $('picker');
+  if (!picker.hidden && t && !editing) picker.replaceChildren(...estimatePicker(t, closePicker).childNodes);
+  if (!t) picker.hidden = true;
+
+  const play = $<HTMLButtonElement>('play');
+  play.textContent = running ? 'Pause' : 'Start';
+  play.className = 'act' + (running ? '' : ' primary');
+  // Nothing to time yet: the add field is the only thing to do.
+  $('actions').hidden = !t;
+  $('endBtn').hidden = !state.run;
 }
 
-// ---------- list ----------
+function closePicker() {
+  $('picker').hidden = true;
+  editing = false;
+}
 
 let dragId: string | null = null;
 
@@ -66,234 +123,259 @@ function renderList() {
   const list = $('list');
   list.replaceChildren();
   const run = state.run;
-  if (!run) return;
-  // Open tasks in priority order, finished ones sink to the bottom.
-  const openTasks = run.tasks.filter((t) => (isSection(run, t) ? !isSectionDone(run, t) : !t.done));
-  const done = run.tasks.filter((t) => !openTasks.includes(t) && !isSection(run, t));
-  for (const t of [...openTasks, ...done]) list.append(row(run, t));
+  if (!run || !run.tasks.length) return;
+  const current = currentTask();
+  // Up next in priority order, finished ones underneath.
+  const open = run.tasks.filter((t) => (isSection(run, t) ? !isSectionDone(run, t) : !t.done));
+  const done = run.tasks.filter((t) => !open.includes(t) && !isSection(run, t));
+  for (const t of [...open, ...done]) {
+    list.append(row(run, t, t === current));
+    if (pickerFor === t.id) {
+      const li = el('li', 'row-picker');
+      li.append(estimatePicker(t, () => {
+        pickerFor = null;
+        render();
+      }));
+      list.append(li);
+    }
+  }
 }
 
-function row(run: Run, t: Task): HTMLLIElement {
-  const section = isSection(run, t);
+function row(run: Run, t: Task, current: boolean): HTMLLIElement {
   const li = el('li');
-  if (section) li.classList.add('section');
-  if (t.done) li.classList.add('done');
-  if (run.activeTaskId === t.id) li.classList.add('active');
-  let depth = 0;
-  for (let p = t.parentId; p; p = run.tasks.find((x) => x.id === p)?.parentId) depth++;
-  li.style.paddingLeft = 8 + depth * 14 + 'px';
-
-  if (!section) {
-    const check = el('span', 'check', '✓');
-    check.title = t.done ? 'Mark as not done' : 'Mark done';
-    check.onclick = (e) => {
-      e.stopPropagation();
-      void api.act({ type: 'toggleDone', id: t.id });
-    };
-    li.append(check);
+  if (isSection(run, t)) {
+    li.className = 'section';
+    li.textContent = t.title;
+    return li;
   }
+  if (t.done) li.classList.add('done');
+  if (current) li.classList.add('current');
+
+  const box = el('span', 'box', '✓');
+  box.title = t.done ? 'Mark as not done' : 'Mark done';
+  box.onclick = (e) => {
+    e.stopPropagation();
+    void api.act({ type: 'toggleDone', id: t.id });
+  };
+
   const name = el('span', 'name', t.title);
   name.title = 'Double-click to rename';
   name.ondblclick = (e) => {
     e.stopPropagation();
-    inlineEdit(name, t.title, (v) => v.trim() && api.act({ type: 'rename', id: t.id, title: v }));
-  };
-  li.append(name);
-
-  const spent = el('span', 'spent mono');
-  spent.dataset.time = t.id;
-  li.append(spent);
-
-  if (!section) {
-    const chip = el('span', 'chip editable', t.estimateMs !== undefined ? formatEstimate(t.estimateMs) : '+ est');
-    chip.title = 'Your estimate, e.g. 25m or 1h30m';
-    chip.onclick = (e) => {
-      e.stopPropagation();
-      inlineEdit(chip, t.estimateMs !== undefined ? formatEstimate(t.estimateMs).replace(' ', '') : '', (v) =>
-        api.act({ type: 'setEstimate', id: t.id, text: v }),
-      );
+    editing = true;
+    const input = el('input');
+    input.value = t.title;
+    input.style.padding = '2px 6px';
+    name.replaceWith(input);
+    input.focus();
+    input.select();
+    let closed = false;
+    const finish = (save: boolean) => {
+      if (closed) return;
+      closed = true;
+      editing = false;
+      if (save && input.value.trim()) void api.act({ type: 'rename', id: t.id, title: input.value });
+      else render();
     };
-    li.append(chip);
+    input.onkeydown = (k) => {
+      if (k.key === 'Enter') finish(true);
+      if (k.key === 'Escape') finish(false);
+    };
+    input.onblur = () => finish(true);
+  };
+  li.append(box, name);
+
+  if (t.done) {
+    // Finished: time, delta against the estimate, gold on a new best.
+    const best = golds.get(taskKey(t.title));
+    const gold = best !== undefined && t.elapsedMs <= best;
+    li.append(el('span', 'num' + (gold ? ' gold' : ''), formatDuration(t.elapsedMs)));
+    if (t.estimateMs !== undefined) {
+      const d = t.elapsedMs - t.estimateMs;
+      li.append(el('span', 'num ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
+    }
+  } else {
+    const spent = liveElapsed(run, t);
+    if (spent >= 1000 && !current) li.append(el('span', 'num', formatDuration(spent)));
+    const est = el('button', 'est', t.estimateMs !== undefined ? formatEstimate(t.estimateMs) : 'estimate');
+    est.type = 'button';
+    est.title = 'How long do you think this takes?';
+    est.onclick = (e) => {
+      e.stopPropagation();
+      pickerFor = pickerFor === t.id ? null : t.id;
+      render();
+    };
+    li.append(est);
+    li.title = current ? '' : 'Click to switch to this task';
+    li.onclick = () => !current && void api.act({ type: 'start', id: t.id });
   }
 
-  const remove = el('button', 'remove', '×');
-  remove.title = 'Remove';
-  remove.onclick = (e) => {
+  const x = el('button', 'x', '×');
+  x.type = 'button';
+  x.title = 'Remove';
+  x.onclick = (e) => {
     e.stopPropagation();
     void api.act({ type: 'remove', id: t.id });
   };
-  li.append(remove);
-
-  if (!section && !t.done) li.onclick = () => void api.act({ type: 'start', id: t.id });
+  li.append(x);
 
   li.draggable = true;
   li.ondragstart = () => (dragId = t.id);
   li.ondragend = () => (dragId = null);
   li.ondragover = (e) => {
     e.preventDefault();
-    li.classList.add('drop-before');
+    li.classList.add('drop');
   };
-  li.ondragleave = () => li.classList.remove('drop-before');
+  li.ondragleave = () => li.classList.remove('drop');
   li.ondrop = (e) => {
     e.preventDefault();
-    li.classList.remove('drop-before');
+    li.classList.remove('drop');
     if (dragId && dragId !== t.id) void api.act({ type: 'move', id: dragId, beforeId: t.id });
   };
   return li;
 }
 
-function inlineEdit(target: HTMLElement, value: string, save: (v: string) => unknown) {
-  editing = true;
-  const input = el('input');
-  input.value = value;
-  input.style.padding = '1px 6px';
-  input.style.width = target.classList.contains('chip') ? '70px' : '100%';
-  target.replaceWith(input);
-  input.focus();
-  input.select();
-  let closed = false;
-  const done = (ok: boolean) => {
-    if (closed) return;
-    closed = true;
-    editing = false;
-    if (ok) void save(input.value);
-    render();
-  };
-  input.onkeydown = (k) => {
-    if (k.key === 'Enter') done(true);
-    if (k.key === 'Escape') done(false);
-  };
-  input.onblur = () => done(true);
-}
+// ---------- the clock ----------
 
-// ---------- ticking ----------
-
-function tick() {
+function frame() {
   if (state) {
-    const now = Date.now();
     const run = state.run;
-    const t = shownTask(run);
-    const elapsed = run && t ? liveElapsed(run, t, now) : 0;
-    const clock = formatClock(elapsed);
-    $('clockMain').textContent = clock.main;
-    $('clockMs').textContent = clock.ms;
+    const t = currentTask();
+    const clock = $('clock');
+    const ms = run && t ? liveElapsed(run, t) : 0;
+    const [hms, milli] = clockParts(ms);
+    $('hms').textContent = hms;
+    $('ms').textContent = milli;
 
-    const over = t?.estimateMs !== undefined && elapsed > t.estimateMs;
-    const c = $('clock');
-    c.classList.toggle('paused', !running());
-    c.classList.toggle('over', over);
+    let tone = 'idle';
+    if (t && isRunning()) tone = t.estimateMs === undefined ? '' : ms <= t.estimateMs ? 'ahead' : 'behind';
+    else if (t && ms > 0) tone = 'paused';
+    clock.className = 'clock ' + tone;
 
-    const track = $('progressTrack');
-    track.hidden = t?.estimateMs === undefined;
-    if (t?.estimateMs) {
-      $('progress').style.width = Math.min(100, (elapsed / t.estimateMs) * 100) + '%';
-      track.classList.toggle('over', over);
-    }
-
-    if (open) {
+    if (isOpen()) {
       const delta = $('delta');
-      if (t?.estimateMs !== undefined) {
-        const d = elapsed - t.estimateMs;
-        delta.textContent = d > 0 ? `${formatDuration(d)} over` : `${formatDuration(-d)} left`;
-        delta.className = 'delta mono ' + (d > 0 ? 'behind' : 'muted');
+      if (t?.estimateMs !== undefined && ms > 0) {
+        const d = t.estimateMs - ms;
+        delta.textContent = d >= 0 ? `${formatDuration(d)} left` : `${formatDuration(-d)} over`;
+        delta.className = 'delta ' + (d >= 0 ? 'ahead' : 'behind');
       } else delta.textContent = '';
-      if (run) {
-        for (const span of document.querySelectorAll<HTMLElement>('[data-time]')) {
-          const task = run.tasks.find((x) => x.id === span.dataset.time);
-          const ms = task ? totalElapsed(run, task, now) : 0;
-          span.textContent = ms >= 1000 ? formatDuration(ms) : '';
-        }
-      }
     }
   }
-  requestAnimationFrame(tick);
+  requestAnimationFrame(frame);
 }
 
 // ---------- wiring ----------
 
-function setOpen(v: boolean) {
-  open = v;
+function render() {
+  golds = new Map(state.golds);
+  renderFace();
+  if (isOpen()) {
+    renderControls();
+    if (!editing) renderList();
+  }
+}
+
+function setOpen(open: boolean) {
   $('more').hidden = !open;
-  $('panel').classList.toggle('open', open);
+  if (!open) {
+    closePicker();
+    pickerFor = null;
+    $('paste').hidden = true;
+  }
   render();
 }
 
-function render() {
-  if (!state) return;
-  document.documentElement.style.setProperty('--accent', state.settings.accent);
-  renderFace();
-  if (open && !editing) renderList();
-}
-
-/** Drag the face to move the window; a click without movement opens or closes the task list. */
+/** The face moves the window when dragged and opens or closes the panel when clicked. */
 function wireFace() {
   const face = $('face');
   let start: { x: number; y: number; lastX: number; lastY: number } | null = null;
-  let moved = false;
-  face.addEventListener('pointerdown', (e) => {
-    if ((e.target as HTMLElement).closest('button')) return;
+  let dragged = false;
+  face.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
     start = { x: e.screenX, y: e.screenY, lastX: e.screenX, lastY: e.screenY };
-    moved = false;
-    face.setPointerCapture(e.pointerId);
+    dragged = false;
   });
-  face.addEventListener('pointermove', (e) => {
+  window.addEventListener('mousemove', (e) => {
     if (!start) return;
-    if (!moved && Math.hypot(e.screenX - start.x, e.screenY - start.y) < 4) return;
-    moved = true;
+    if (!dragged && Math.hypot(e.screenX - start.x, e.screenY - start.y) < 4) return;
+    dragged = true;
     void api.act({ type: 'moveBy', dx: e.screenX - start.lastX, dy: e.screenY - start.lastY });
     start.lastX = e.screenX;
     start.lastY = e.screenY;
   });
-  face.addEventListener('pointerup', () => {
-    if (!start) return;
+  window.addEventListener('mouseup', () => {
+    if (start && !dragged) {
+      setOpen(!isOpen());
+      if (isOpen() && !currentTask()) $('addInput').focus();
+    }
     start = null;
-    if (moved) void api.act({ type: 'savePosition' });
-    else setOpen(!open);
   });
 }
 
 function wire() {
   wireFace();
-  $('play').onclick = togglePlay;
-  $('playBig').onclick = togglePlay;
-  $('split').onclick = () => void api.act({ type: 'split' });
-  $('doneBig').onclick = () => void api.act({ type: 'split' });
 
-  const est = $<HTMLInputElement>('estInput');
-  est.onchange = () => {
-    const t = shownTask(state.run);
-    if (t) void api.act({ type: 'setEstimate', id: t.id, text: est.value });
+  $('estimate').onclick = () => {
+    const p = $('picker');
+    p.hidden = !p.hidden;
+    render();
   };
-  est.onkeydown = (k) => {
-    if (k.key === 'Enter') est.blur();
+  $('play').onclick = () => {
+    const t = currentTask();
+    if (!t) return;
+    void (state.run?.activeTaskId ? api.act({ type: 'togglePause' }) : api.act({ type: 'start', id: t.id }));
+  };
+  $('done').onclick = () => {
+    const t = currentTask();
+    if (!t) return;
+    closePicker();
+    void (state.run?.activeTaskId ? api.act({ type: 'split' }) : api.act({ type: 'toggleDone', id: t.id }));
   };
 
-  const add = $<HTMLInputElement>('addInput');
   $('addForm').onsubmit = (e) => {
     e.preventDefault();
-    if (add.value.trim()) void api.act({ type: 'quickAdd', text: add.value });
-    add.value = '';
+    const input = $<HTMLInputElement>('addInput');
+    if (input.value.trim()) void api.act({ type: 'quickAdd', text: input.value });
+    input.value = '';
   };
-  // Pasting several lines adds them all: bullets, checkboxes, headings and indentation become sections.
-  add.addEventListener('paste', (e) => {
-    const text = e.clipboardData?.getData('text') ?? '';
-    if (!text.includes('\n')) return;
-    e.preventDefault();
-    void api.act({ type: 'import', text });
-  });
-  api.onFocusAdd(() => {
-    setOpen(true);
-    add.focus();
-  });
 
-  $('dashBtn').onclick = () => void api.act({ type: 'openDashboard' });
+  const paste = $('paste');
+  $('pasteBtn').onclick = () => {
+    paste.hidden = !paste.hidden;
+    if (!paste.hidden) $('pasteText').focus();
+  };
+  $('pasteCancel').onclick = () => (paste.hidden = true);
+  $('pasteFile').onclick = () => {
+    paste.hidden = true;
+    void api.act({ type: 'importFile' });
+  };
+  $('pasteGo').onclick = () => {
+    const ta = $<HTMLTextAreaElement>('pasteText');
+    if (ta.value.trim()) void api.act({ type: 'import', text: ta.value });
+    ta.value = '';
+    paste.hidden = true;
+  };
+
+  $('statsBtn').onclick = () => void api.act({ type: 'openDashboard' });
   $('endBtn').onclick = () => void api.act({ type: 'endRun' });
   $('hideBtn').onclick = () => void api.act({ type: 'hideOverlay' });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && open && !editing) setOpen(false);
+
+  api.onFocusAdd(() => {
+    setOpen(true);
+    $('addInput').focus();
   });
 
-  // The window is exactly as tall as what's showing.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!$('picker').hidden || pickerFor || !paste.hidden) {
+      closePicker();
+      pickerFor = null;
+      paste.hidden = true;
+      render();
+    } else setOpen(false);
+  });
+
+  // The window is always exactly as tall as what's showing.
   new ResizeObserver(() => void api.act({ type: 'fitHeight', height: $('panel').offsetHeight })).observe($('panel'));
 }
 
@@ -304,4 +386,4 @@ api.onState((s) => {
 });
 state = await api.getState();
 render();
-requestAnimationFrame(tick);
+requestAnimationFrame(frame);
