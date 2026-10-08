@@ -30,6 +30,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--clock); out
   font-family: var(--digits); font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -0.02em;
   font-size: 46px; line-height: 1; color: var(--clock); white-space: nowrap; transition: color 0.4s;
 }
+.clock .sign:empty { display: none; }
 .clock .ms { font-size: 0.5em; font-weight: 500; letter-spacing: 0; opacity: 0.6; margin-left: 1px; }
 .clock.idle, .clock.paused { color: var(--dim); }
 .clock.ahead { color: var(--ahead); }
@@ -42,6 +43,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--clock); out
 .session .num.ahead { color: var(--ahead); }
 .session .num.behind { color: var(--behind); }
 .session.recap { margin-top: 6px; font-size: 13px; }
+
+.session.on-break #sessionLabel, .session.on-break #sessionTime { color: var(--clock); }
 
 /* ---------- more ---------- */
 .more { padding: 0 18px 14px; display: flex; flex-direction: column; gap: 12px; }
@@ -106,5 +109,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--clock); out
 button.text { padding: 0; border: none; background: none; font-size: 12px; color: var(--dim); }
 button.text:hover { color: var(--clock); background: none; }
 .foot { padding-top: 2px; }
+
+.settings { display: flex; flex-direction: column; gap: 10px; padding: 2px 0; }
+.toggle { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-size: 12px; color: var(--dim); line-height: 1.4; }
+.toggle b { display: block; font-weight: 500; color: #d6d6d1; font-size: 13px; }
+.toggle input { width: 14px; height: 14px; margin: 2px 0 0; accent-color: var(--ahead); flex: none; }
 
 @media (prefers-reduced-motion: reduce) { .clock { transition: none; } }

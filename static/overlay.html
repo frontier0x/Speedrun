@@ -12,7 +12,7 @@
     <!-- The face: all you see when collapsed. Drag it to move, click it to open. -->
     <section class="face" id="face" title="Click to open, drag to move">
       <div class="task" id="task"></div>
-      <div class="clock" id="clock"><span id="hms">0:00:00</span><span class="ms" id="ms">.000</span></div>
+      <div class="clock" id="clock"><span class="sign" id="sign"></span><span id="hms">0:00:00</span><span class="ms" id="ms">.000</span></div>
       <div class="session" id="session" hidden>
         <span id="sessionLabel">Session</span>
         <span class="num" id="sessionTime"></span>
@@ -49,9 +49,21 @@
         </div>
       </div>
 
+      <div class="settings" id="settings" hidden>
+        <label class="toggle">
+          <input type="checkbox" id="optCountdown" />
+          <span><b>Countdown</b>The clock counts down from the estimate, then runs into the red.</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="optBreaks" />
+          <span><b>Count breaks in session time</b>Off: the session clock stops while you're on a break. Breaks are always shown at the end.</span>
+        </label>
+      </div>
+
       <footer class="row foot">
         <button class="text" id="pasteBtn" type="button">Paste a list</button>
         <button class="text" id="statsBtn" type="button">Stats</button>
+        <button class="text" id="settingsBtn" type="button">Settings</button>
         <span class="spacer"></span>
         <button class="text" id="endBtn" type="button" title="Stop the clock and save this run">End run</button>
         <button class="text" id="hideBtn" type="button" title="Hide (⌘⇧Space)">Hide</button>

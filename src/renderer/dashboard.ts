@@ -163,6 +163,7 @@ function renderDetail() {
   if (s.estimateMs !== undefined) stat(formatEstimate(s.estimateMs), 'estimated');
   stat(`${s.tasksDone}/${s.tasksTotal}`, 'tasks done');
   if (s.deltaMs !== undefined) stat(formatDuration(Math.abs(s.deltaMs)), s.deltaMs <= 0 ? 'saved vs. estimates' : 'over estimates');
+  if (s.breakMs >= 1000) stat(formatDuration(s.breakMs), 'breaks');
   if (s.onEstimateRate !== undefined) stat(Math.round(s.onEstimateRate * 100) + '%', 'on estimate');
   if (sob !== undefined) stat(formatDuration(sob), 'sum of best');
   box.append(stats);

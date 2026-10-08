@@ -29,6 +29,14 @@ estimates so far, for example `4:45 saved` in green or `2:03 over` in red. Finis
 difference; the task you're on only counts once it runs over. When every task is done, or you end the
 run, the big clock switches to the total time you saved (or lost) against your estimates.
 
+**Pause** starts a break. While you're on one, the session line becomes the break's clock. By default
+breaks don't count toward the session's time, so the session pauses with you; switch on **Count breaks in
+session time** under Settings to include them. Either way, the recap at the end shows how long your
+breaks were.
+
+**Countdown** (Settings) makes the task clock count down from the estimate to zero, then on into the
+red with a minus sign, e.g. `−0:02:34.050`.
+
 Click the clock to open the rest (drag it to move it):
 
 - **Estimate**: pick 5m, 10m, 15m, 25m, 45m, 1h, 1h30m or 2h, or type any time. The panel shows how much
@@ -73,7 +81,7 @@ npm start
 Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
 
 - `runs/YYYY-MM-DD/run-*.json`: your task runs
-- `settings.json`: color, opacity and timer position
+- `settings.json`: countdown, whether breaks count, and timer position
 
 ## Roadmap
 

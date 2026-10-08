@@ -1,6 +1,7 @@
 import type { AppState, SpeedrunApi } from '../api.js';
 import {
-  formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, runElapsed, sessionDelta, taskKey, type Run, type Task,
+  breakElapsed, formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, sessionDelta, sessionElapsed, taskKey,
+  type Run, type Task,
 } from '../runs.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
@@ -113,30 +114,40 @@ function sessionLine(now: number) {
   const recap = recapRun();
   const run = state.run;
 
+  const countBreaks = state.settings.countBreaks;
   if (recap) {
-    // The big clock shows what you saved; this line keeps the session's length and count.
+    // The big clock shows what you saved; this line keeps the session's length, tasks and breaks.
     const leaves = recap.tasks.filter((x) => !isSection(recap, x));
+    const breaks = breakElapsed(recap, now);
     box.hidden = false;
     box.className = 'session recap';
     $('sessionLabel').textContent = 'Session';
-    time.textContent = clockParts(runElapsed(recap, now))[0];
+    time.textContent = clockParts(sessionElapsed(recap, countBreaks, now))[0];
     time.className = 'num';
-    delta.textContent = `${leaves.filter((x) => x.done).length} of ${leaves.length} tasks`;
+    delta.textContent = `${leaves.filter((x) => x.done).length} of ${leaves.length} tasks` + (breaks >= 1000 ? `, ${formatDuration(breaks)} break` : '');
     delta.className = '';
-    delta.title = '';
+    delta.title = breaks >= 1000 ? (countBreaks ? 'Breaks are included in the session time' : 'Breaks are not included in the session time') : '';
     return;
   }
-  const total = run ? runElapsed(run, now) : 0;
+  const total = run ? sessionElapsed(run, countBreaks, now) : 0;
   box.hidden = total < 1000;
   if (box.hidden) return;
   const d = sessionDelta(run!, now);
+  delta.textContent = d === undefined ? '' : d <= 0 ? `${formatDuration(-d)} saved` : `${formatDuration(d)} over`;
+  delta.className = 'num ' + tone(d);
+  delta.title = d === undefined ? '' : d <= 0 ? 'Saved so far against your estimates' : 'Over your estimates so far';
+  if (run!.breakSince !== undefined) {
+    // On a break: this line becomes the break's own clock.
+    box.className = 'session on-break';
+    $('sessionLabel').textContent = 'Break';
+    time.textContent = clockParts(now - run!.breakSince)[0];
+    time.className = 'num';
+    return;
+  }
   box.className = 'session';
   $('sessionLabel').textContent = 'Session';
   time.textContent = clockParts(total)[0];
   time.className = 'num ' + tone(d);
-  delta.textContent = d === undefined ? '' : d <= 0 ? `${formatDuration(-d)} saved` : `${formatDuration(d)} over`;
-  delta.className = 'num ' + tone(d);
-  delta.title = d === undefined ? '' : d <= 0 ? 'Saved so far against your estimates' : 'Over your estimates so far';
 }
 
 // ---------- more ----------
@@ -296,8 +307,12 @@ function frame() {
     const clock = $('clock');
     // The big clock is the task's time; once the session is done, the time you saved (or lost).
     const recapDelta = recap ? sessionDelta(recap, now) : undefined;
-    const ms = run && t ? liveElapsed(run, t, now) : recap ? (recapDelta !== undefined ? Math.abs(recapDelta) : runElapsed(recap, now)) : 0;
-    const [hms, milli] = clockParts(ms);
+    const ms = run && t ? liveElapsed(run, t, now) : recap ? (recapDelta !== undefined ? Math.abs(recapDelta) : sessionElapsed(recap, state.settings.countBreaks, now)) : 0;
+    // Countdown: show what's left of the estimate, then how far past it you are, with a minus.
+    const counting = Boolean(t && state.settings.countdown && t.estimateMs !== undefined);
+    const shown = counting ? t!.estimateMs! - ms : ms;
+    const [hms, milli] = clockParts(Math.abs(shown));
+    $('sign').textContent = shown < 0 ? '−' : '';
     $('hms').textContent = hms;
     $('ms').textContent = milli;
 
@@ -324,6 +339,8 @@ function frame() {
 
 function render() {
   golds = new Map(state.golds);
+  $<HTMLInputElement>('optCountdown').checked = state.settings.countdown;
+  $<HTMLInputElement>('optBreaks').checked = state.settings.countBreaks;
   renderFace();
   if (isOpen()) {
     renderControls();
@@ -337,6 +354,7 @@ function setOpen(open: boolean) {
     closePicker();
     pickerFor = null;
     $('paste').hidden = true;
+    $('settings').hidden = true;
   }
   render();
 }
@@ -413,6 +431,11 @@ function wire() {
   };
 
   $('statsBtn').onclick = () => void api.act({ type: 'openDashboard' });
+  $('settingsBtn').onclick = () => ($('settings').hidden = !$('settings').hidden);
+  $<HTMLInputElement>('optCountdown').onchange = (e) =>
+    void api.act({ type: 'settings', patch: { countdown: (e.target as HTMLInputElement).checked } });
+  $<HTMLInputElement>('optBreaks').onchange = (e) =>
+    void api.act({ type: 'settings', patch: { countBreaks: (e.target as HTMLInputElement).checked } });
   $('endBtn').onclick = () => void api.act({ type: 'endRun' });
   $('hideBtn').onclick = () => void api.act({ type: 'hideOverlay' });
 

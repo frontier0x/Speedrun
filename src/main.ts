@@ -4,8 +4,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
-  addTasks, completeActive, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
-  parseTaskList, pause, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
+  addTasks, completeActive, dropBreak, endBreak, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
+  parseTaskList, pause, removeTask, resume, runElapsed, startBreak, startTask, summarize, toggleDone, type Run, type Settings,
 } from './runs.js';
 import { RunStore } from './runStore.js';
 
@@ -67,6 +67,7 @@ function ensureRun(): Run {
 /** Stops the clock, saves the run as finished and clears it; the next task you add starts a fresh run. */
 async function endRun(now: number) {
   if (!run) return;
+  dropBreak(run);
   pause(run, now);
   run.endedAt ??= new Date(now).toISOString();
   await runStore.save(run);
@@ -91,7 +92,7 @@ async function act(a: Action) {
       break;
     }
     case 'start':
-      if (run) startTask(run, a.id, now);
+      if (run) startTask(endBreak(run, now), a.id, now);
       break;
     case 'toggleDone':
       if (run) toggleDone(run, a.id, now);
@@ -100,7 +101,7 @@ async function act(a: Action) {
       if (run) completeActive(run, now);
       break;
     case 'togglePause':
-      if (run) run.activeSince !== undefined ? pause(run, now) : resume(run, now);
+      if (run) run.activeSince !== undefined ? startBreak(run, now) : endBreak(resume(run, now), now);
       break;
     case 'remove':
       if (run) removeTask(run, a.id, now);
@@ -121,6 +122,7 @@ async function act(a: Action) {
     case 'settings':
       settings = { ...settings, ...a.patch };
       if (a.patch.opacity !== undefined) overlay?.setOpacity(settings.opacity);
+      buildMenu();
       persistSettings();
       break;
     case 'endRun':
@@ -148,6 +150,7 @@ async function act(a: Action) {
       buildMenu();
       return;
   }
+  if (run?.endedAt) dropBreak(run);
   persist();
   broadcast();
 }
@@ -244,6 +247,20 @@ function buildMenu() {
       { label: 'End run', click: () => void act({ type: 'endRun' }) },
       { type: 'separator' },
       {
+        label: 'Countdown',
+        sublabel: 'Count down from the estimate',
+        type: 'checkbox',
+        checked: settings.countdown,
+        click: () => void act({ type: 'settings', patch: { countdown: !settings.countdown } }),
+      },
+      {
+        label: 'Count breaks in session time',
+        type: 'checkbox',
+        checked: settings.countBreaks,
+        click: () => void act({ type: 'settings', patch: { countBreaks: !settings.countBreaks } }),
+      },
+      { type: 'separator' },
+      {
         label: 'Open at login',
         type: 'checkbox',
         checked: app.getLoginItemSettings().openAtLogin,
@@ -304,6 +321,7 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   // Bank the running clock so time while the app is closed doesn't count.
   if (run) {
+    dropBreak(run);
     pause(run);
     runStore.saveSync(run);
   }

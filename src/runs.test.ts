@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   addTasks, completeActive, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
-  parseTaskList, projectedRemaining, removeTask, resume, runEstimate, sessionDelta, startTask, summarize, totalElapsed,
+  parseTaskList, projectedRemaining, removeTask, resume, runEstimate, sessionDelta, startBreak, endBreak, dropBreak, breakElapsed, sessionElapsed, startTask, summarize, totalElapsed,
   totalEstimate,
 } from './runs.js';
 
@@ -114,4 +114,21 @@ test('session delta counts finished tasks and the running one once it is over', 
   assert.equal(sessionDelta(run, 50 * MIN), 2 * MIN);
   assert.equal(b.done, true);
   assert.equal(summarize(run, 50 * MIN).deltaMs, 2 * MIN);
+});
+
+test('breaks are counted separately and only count toward the session when asked', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- A 30m'));
+  startTask(run, run.tasks[0].id, 0);
+  startBreak(run, 10 * MIN); // 10 min work, then a break
+  assert.equal(breakElapsed(run, 15 * MIN), 5 * MIN);
+  resume(run, 25 * MIN);
+  endBreak(run, 25 * MIN); // 15 min break
+  assert.equal(breakElapsed(run, 40 * MIN), 15 * MIN);
+  assert.equal(sessionElapsed(run, false, 40 * MIN), 25 * MIN);
+  assert.equal(sessionElapsed(run, true, 40 * MIN), 40 * MIN);
+  startBreak(run, 40 * MIN);
+  dropBreak(run); // ending the session mid-break doesn't count that break
+  assert.equal(breakElapsed(run, 90 * MIN), 15 * MIN);
+  assert.equal(summarize(run, 90 * MIN).breakMs, 15 * MIN);
 });

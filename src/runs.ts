@@ -26,15 +26,23 @@ export interface Run {
   activeTaskId?: string;
   /** Epoch ms when the active task last started ticking; undefined while paused. */
   activeSince?: number;
+  /** Breaks: time spent paused with Pause, not counting the break going on now. */
+  breakMs?: number;
+  /** Epoch ms when the current break started; undefined when you're not on a break. */
+  breakSince?: number;
 }
 
 export interface Settings {
   accent: string;
   opacity: number;
+  /** The task clock counts down from the estimate instead of up. */
+  countdown: boolean;
+  /** Breaks count toward the session's time. Off: the session pauses with you. */
+  countBreaks: boolean;
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
-export const DEFAULT_SETTINGS: Settings = { accent: '#e8e8e8', opacity: 0.96 };
+export const DEFAULT_SETTINGS: Settings = { accent: '#e8e8e8', opacity: 0.96, countdown: false, countBreaks: false };
 
 export const ACCENTS = ['#e8e8e8', '#7c5cff', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#e5e7eb'];
 
@@ -192,6 +200,38 @@ export function runEstimate(run: Run): number | undefined {
   return ests.every((e) => e === undefined) ? undefined : ests.reduce<number>((a, e) => a + (e ?? 0), 0);
 }
 
+// ---------- breaks ----------
+
+/** Total break time so far, including the break going on now. */
+export function breakElapsed(run: Run, now = Date.now()): number {
+  return (run.breakMs ?? 0) + (run.breakSince !== undefined ? now - run.breakSince : 0);
+}
+
+/** Pause pressed: the clock stops and a break starts. */
+export function startBreak(run: Run, now = Date.now()): Run {
+  pause(run, now);
+  if (run.activeTaskId) run.breakSince ??= now;
+  return run;
+}
+
+/** Back to work: the break's length is banked. */
+export function endBreak(run: Run, now = Date.now()): Run {
+  if (run.breakSince !== undefined) run.breakMs = (run.breakMs ?? 0) + Math.max(0, now - run.breakSince);
+  run.breakSince = undefined;
+  return run;
+}
+
+/** A break left open when the session ends or the app quits isn't a break, so it's dropped. */
+export function dropBreak(run: Run): Run {
+  run.breakSince = undefined;
+  return run;
+}
+
+/** The session's time: work, plus breaks if you count them. */
+export function sessionElapsed(run: Run, countBreaks: boolean, now = Date.now()): number {
+  return runElapsed(run, now) + (countBreaks ? breakElapsed(run, now) : 0);
+}
+
 /**
  * How far the session is ahead of or behind your estimates, like a speedrun's running delta. Finished tasks
  * count their full difference; the running task only counts once it's over (until then it could still come
@@ -336,6 +376,7 @@ export interface RunSummary {
   onEstimateRate?: number;
   /** Time against your estimates; negative means saved. See sessionDelta. */
   deltaMs?: number;
+  breakMs: number;
 }
 
 export function summarize(run: Run, now = Date.now()): RunSummary {
@@ -353,5 +394,6 @@ export function summarize(run: Run, now = Date.now()): RunSummary {
     tasksTotal: leaves.length,
     onEstimateRate: estimated.length ? estimated.filter((t) => t.elapsedMs <= t.estimateMs!).length / estimated.length : undefined,
     deltaMs: sessionDelta(run, now),
+    breakMs: breakElapsed(run, now),
   };
 }
