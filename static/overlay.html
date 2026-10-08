@@ -13,6 +13,30 @@
     <section class="face" id="face" title="Click to open, drag to move">
       <div class="task" id="task"></div>
       <div class="clock" id="clock"><span id="hms">0:00:00</span><span class="ms" id="ms">.000</span></div>
+      <div class="session" id="session" hidden>
+        <span class="label">Session</span>
+        <span class="time" id="sessionTime">0:00:00</span>
+        <span class="spacer"></span>
+        <span class="saved" id="sessionSaved"></span>
+      </div>
+    </section>
+
+    <!-- Shown when a session ends: what you saved against your plan. -->
+    <section class="summary" id="summary" hidden>
+      <div class="task">Session done</div>
+      <div class="clock" id="savedClock"><span id="savedHms">0:00:00</span><span class="ms" id="savedMs">.000</span></div>
+      <div class="saved-label" id="savedLabel"></div>
+      <dl class="facts">
+        <div><dt>Session</dt><dd id="factTotal"></dd></div>
+        <div><dt>Planned</dt><dd id="factPlanned"></dd></div>
+        <div><dt>Actual</dt><dd id="factActual"></dd></div>
+        <div><dt>Tasks</dt><dd id="factTasks"></dd></div>
+      </dl>
+      <div class="row">
+        <button class="text" id="summaryStats" type="button">Stats</button>
+        <span class="spacer"></span>
+        <button class="act primary small" id="newSession" type="button">New session</button>
+      </div>
     </section>
 
     <section class="more" id="more" hidden>
@@ -47,7 +71,7 @@
         <button class="text" id="pasteBtn" type="button">Paste a list</button>
         <button class="text" id="statsBtn" type="button">Stats</button>
         <span class="spacer"></span>
-        <button class="text" id="endBtn" type="button" title="Stop the clock and save this run">End run</button>
+        <button class="text" id="endBtn" type="button" title="Stop the clock and see what you saved">End session</button>
         <button class="text" id="hideBtn" type="button" title="Hide (⌘⇧Space)">Hide</button>
       </footer>
     </section>

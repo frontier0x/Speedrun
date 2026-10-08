@@ -19,6 +19,7 @@ const runStore = new RunStore(runsRoot, join(app.getPath('userData'), 'settings.
 const OVERLAY_WIDTH = 340;
 let settings: Settings;
 let run: Run | null = null;
+let finished: Run | null = null;
 let pastRuns: Run[] = [];
 
 let tray: Tray | null = null;
@@ -30,7 +31,7 @@ const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))] };
+  return { run, finished, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))] };
 }
 
 function broadcast() {
@@ -55,6 +56,7 @@ function persistSettings() {
 
 function ensureRun(): Run {
   if (!run) {
+    finished = null;
     run = newRun('manual');
     pastRuns = [run, ...pastRuns];
   }
@@ -67,6 +69,7 @@ async function endRun(now: number) {
   pause(run, now);
   run.endedAt ??= new Date(now).toISOString();
   await runStore.save(run);
+  finished = run.tasks.length ? run : null;
   run = null;
 }
 
@@ -122,6 +125,9 @@ async function act(a: Action) {
     case 'endRun':
       await endRun(now);
       break;
+    case 'dismissSummary':
+      finished = null;
+      break;
     case 'moveBy':
       if (overlay && !overlay.isDestroyed()) {
         const [x, y] = overlay.getPosition();
@@ -144,6 +150,8 @@ async function act(a: Action) {
       buildMenu();
       return;
   }
+  // Finishing the last task ends the session and shows what you saved.
+  if (run?.endedAt) await endRun(now);
   persist();
   broadcast();
 }
@@ -237,7 +245,7 @@ function buildMenu() {
       { label: 'Dashboard', click: openDashboard },
       { type: 'separator' },
       { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
-      { label: 'End run', click: () => void act({ type: 'endRun' }) },
+      { label: 'End session', click: () => void act({ type: 'endRun' }) },
       { type: 'separator' },
       {
         label: 'Open at login',

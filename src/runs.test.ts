@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   addTasks, completeActive, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
-  totalEstimate,
+  timeSaved, totalEstimate,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -98,4 +98,18 @@ test('gold splits keep the best time per task across runs', () => {
   r2.tasks[0].done = true;
   r2.tasks[0].elapsedMs = 12 * MIN;
   assert.equal(goldSplits([r1, r2]).get('inbox zero'), 12 * MIN);
+});
+
+test('counts time saved against estimates', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- A 30m\n- B 10m\n- C\n- D 5m'));
+  const [a, b, c, d] = run.tasks;
+  assert.equal(timeSaved(run, 0), undefined);
+  a.elapsedMs = 20 * MIN; a.done = true; // 10m saved
+  b.elapsedMs = 15 * MIN; b.done = true; // 5m lost
+  c.elapsedMs = 60 * MIN; c.done = true; // no estimate, ignored
+  d.elapsedMs = 3 * MIN; // running under estimate: nothing saved yet
+  assert.deepEqual(timeSaved(run, 0), { savedMs: 5 * MIN, plannedMs: 40 * MIN, actualMs: 35 * MIN });
+  d.elapsedMs = 9 * MIN; // 4m over and still going
+  assert.equal(timeSaved(run, 0)!.savedMs, 1 * MIN);
 });

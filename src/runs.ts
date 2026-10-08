@@ -199,6 +199,32 @@ export function projectedRemaining(run: Run, now = Date.now()): number {
     .reduce((sum, t) => sum + Math.max(0, (t.estimateMs ?? 0) - liveElapsed(run, t, now)), 0);
 }
 
+/**
+ * Time saved against your estimates. Finished tasks count their full difference; an unfinished task
+ * counts only once it runs past its estimate, since time still left on it isn't saved yet.
+ * Tasks without an estimate don't count. Undefined when nothing counts yet.
+ */
+export function timeSaved(run: Run, now = Date.now()): { savedMs: number; plannedMs: number; actualMs: number } | undefined {
+  let savedMs = 0;
+  let plannedMs = 0;
+  let actualMs = 0;
+  let any = false;
+  for (const t of run.tasks) {
+    if (isSection(run, t) || t.estimateMs === undefined) continue;
+    const spent = liveElapsed(run, t, now);
+    if (t.done) {
+      plannedMs += t.estimateMs;
+      actualMs += spent;
+      savedMs += t.estimateMs - spent;
+      any = true;
+    } else if (spent > t.estimateMs) {
+      savedMs -= spent - t.estimateMs;
+      any = true;
+    }
+  }
+  return any ? { savedMs, plannedMs, actualMs } : undefined;
+}
+
 // ---------- mutations (return the same run, mutated) ----------
 
 function stopClock(run: Run, now: number) {
@@ -319,6 +345,8 @@ export interface RunSummary {
   tasksTotal: number;
   /** Share of finished, estimated tasks that came in at or under estimate. */
   onEstimateRate?: number;
+  /** Time saved against your estimates; negative means over. See timeSaved. */
+  savedMs?: number;
 }
 
 export function summarize(run: Run, now = Date.now()): RunSummary {
@@ -335,5 +363,6 @@ export function summarize(run: Run, now = Date.now()): RunSummary {
     tasksDone: leaves.filter((t) => t.done).length,
     tasksTotal: leaves.length,
     onEstimateRate: estimated.length ? estimated.filter((t) => t.elapsedMs <= t.estimateMs!).length / estimated.length : undefined,
+    savedMs: timeSaved(run, now)?.savedMs,
   };
 }

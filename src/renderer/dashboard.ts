@@ -34,6 +34,7 @@ function renderTiles() {
   const weekAgo = now - 7 * 86_400_000;
   const week = summaries.filter((s) => new Date(s.startedAt).getTime() >= weekAgo);
   const weekMs = week.reduce((a, s) => a + s.elapsedMs, 0);
+  const weekSaved = week.reduce((a, s) => a + (s.savedMs ?? 0), 0);
   const rates = summaries.map((s) => s.onEstimateRate).filter((r): r is number => r !== undefined);
   const accuracy = rates.length ? Math.round((rates.reduce((a, r) => a + r, 0) / rates.length) * 100) + '%' : '–';
 
@@ -49,6 +50,7 @@ function renderTiles() {
 
   $('tiles').replaceChildren(
     tile(hours(weekMs), 'tracked this week'),
+    tile((weekSaved < 0 ? '−' : '') + hours(Math.abs(weekSaved)), weekSaved < 0 ? 'over plan this week' : 'saved this week'),
     tile(String(summaries.reduce((a, s) => a + s.tasksDone, 0)), 'tasks finished'),
     tile(accuracy, 'on or under estimate'),
     tile(String(golds.size), 'gold splits'),
@@ -160,6 +162,7 @@ function renderDetail() {
   stat(formatDuration(runElapsed(run)), 'total time');
   if (s.estimateMs !== undefined) stat(formatEstimate(s.estimateMs), 'estimated');
   stat(`${s.tasksDone}/${s.tasksTotal}`, 'tasks done');
+  if (s.savedMs !== undefined) stat(formatDuration(Math.abs(s.savedMs)), s.savedMs >= 0 ? 'saved vs. plan' : 'over plan');
   if (s.onEstimateRate !== undefined) stat(Math.round(s.onEstimateRate * 100) + '%', 'on estimate');
   if (sob !== undefined) stat(formatDuration(sob), 'sum of best');
   box.append(stats);
