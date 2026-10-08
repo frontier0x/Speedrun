@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   addTasks, completeActive, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
-  parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
+  parseTaskList, projectedRemaining, removeTask, resume, runEstimate, sessionDelta, startTask, summarize, totalElapsed,
   totalEstimate,
 } from './runs.js';
 
@@ -98,4 +98,20 @@ test('gold splits keep the best time per task across runs', () => {
   r2.tasks[0].done = true;
   r2.tasks[0].elapsedMs = 12 * MIN;
   assert.equal(goldSplits([r1, r2]).get('inbox zero'), 12 * MIN);
+});
+
+test('session delta counts finished tasks and the running one once it is over', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- A 10m\n- B 20m\n- C'));
+  const [a, b] = run.tasks;
+  assert.equal(sessionDelta(run, 0), undefined);
+  startTask(run, a.id, 0);
+  completeActive(run, 7 * MIN); // A: 3 min under, B starts
+  assert.equal(sessionDelta(run, 7 * MIN), -3 * MIN);
+  assert.equal(sessionDelta(run, 20 * MIN), -3 * MIN); // B running, still under
+  assert.equal(sessionDelta(run, 32 * MIN), 2 * MIN); // B 5 min over
+  completeActive(run, 32 * MIN); // C has no estimate and doesn't count
+  assert.equal(sessionDelta(run, 50 * MIN), 2 * MIN);
+  assert.equal(b.done, true);
+  assert.equal(summarize(run, 50 * MIN).deltaMs, 2 * MIN);
 });

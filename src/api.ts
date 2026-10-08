@@ -6,6 +6,8 @@ export interface AppState {
   settings: Settings;
   /** Best time per task title (see taskKey), from finished runs. */
   golds: [string, number][];
+  /** The session you just ended, for its recap. Null while a session is going. */
+  lastRun: Run | null;
 }
 
 export type Action =

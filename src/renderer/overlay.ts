@@ -1,5 +1,7 @@
 import type { AppState, SpeedrunApi } from '../api.js';
-import { formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, taskKey, type Run, type Task } from '../runs.js';
+import {
+  formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, runElapsed, sessionDelta, taskKey, type Run, type Task,
+} from '../runs.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -34,6 +36,15 @@ function currentTask(): Task | undefined {
   if (!run) return undefined;
   return run.tasks.find((t) => t.id === run.activeTaskId) ?? run.tasks.find((t) => !t.done && !isSection(run, t));
 }
+
+/** A finished session to recap: every task done, or the one you just ended. */
+function recapRun(): Run | null {
+  const run = state.run;
+  if (run?.tasks.length && !currentTask()) return run;
+  return run ? null : state.lastRun;
+}
+
+const tone = (delta: number | undefined) => (delta === undefined ? '' : delta <= 0 ? 'ahead' : 'behind');
 
 const isRunning = () => Boolean(state.run?.activeTaskId && state.run.activeSince !== undefined);
 const isOpen = () => !$('more').hidden;
@@ -84,9 +95,48 @@ function estimatePicker(t: Task, onDone: () => void): HTMLElement {
 
 function renderFace() {
   const t = currentTask();
+  const recap = recapRun();
   const task = $('task');
-  task.textContent = t ? t.title : state.run?.tasks.length ? 'All done. GG.' : 'Click to add your first task';
+  if (t) task.textContent = t.title;
+  else if (recap) {
+    const d = sessionDelta(recap);
+    task.textContent = d === undefined ? 'Session done' : d <= 0 ? 'Session done. You saved' : 'Session done. Over your estimates by';
+  } else task.textContent = 'Click to add your first task';
   task.className = 'task' + (t ? '' : ' empty');
+}
+
+/** Under the clock: session time and delta while you work, the recap once you're done. */
+function sessionLine(now: number) {
+  const box = $('session');
+  const time = $('sessionTime');
+  const delta = $('sessionDelta');
+  const recap = recapRun();
+  const run = state.run;
+
+  if (recap) {
+    // The big clock shows what you saved; this line keeps the session's length and count.
+    const leaves = recap.tasks.filter((x) => !isSection(recap, x));
+    box.hidden = false;
+    box.className = 'session recap';
+    $('sessionLabel').textContent = 'Session';
+    time.textContent = clockParts(runElapsed(recap, now))[0];
+    time.className = 'num';
+    delta.textContent = `${leaves.filter((x) => x.done).length} of ${leaves.length} tasks`;
+    delta.className = '';
+    delta.title = '';
+    return;
+  }
+  const total = run ? runElapsed(run, now) : 0;
+  box.hidden = total < 1000;
+  if (box.hidden) return;
+  const d = sessionDelta(run!, now);
+  box.className = 'session';
+  $('sessionLabel').textContent = 'Session';
+  time.textContent = clockParts(total)[0];
+  time.className = 'num ' + tone(d);
+  delta.textContent = d === undefined ? '' : d <= 0 ? `${formatDuration(-d)} saved` : `${formatDuration(d)} over`;
+  delta.className = 'num ' + tone(d);
+  delta.title = d === undefined ? '' : d <= 0 ? 'Saved so far against your estimates' : 'Over your estimates so far';
 }
 
 // ---------- more ----------
@@ -239,18 +289,24 @@ function row(run: Run, t: Task, current: boolean): HTMLLIElement {
 
 function frame() {
   if (state) {
+    const now = Date.now();
     const run = state.run;
     const t = currentTask();
+    const recap = recapRun();
     const clock = $('clock');
-    const ms = run && t ? liveElapsed(run, t) : 0;
+    // The big clock is the task's time; once the session is done, the time you saved (or lost).
+    const recapDelta = recap ? sessionDelta(recap, now) : undefined;
+    const ms = run && t ? liveElapsed(run, t, now) : recap ? (recapDelta !== undefined ? Math.abs(recapDelta) : runElapsed(recap, now)) : 0;
     const [hms, milli] = clockParts(ms);
     $('hms').textContent = hms;
     $('ms').textContent = milli;
 
-    let tone = 'idle';
-    if (t && isRunning()) tone = t.estimateMs === undefined ? '' : ms <= t.estimateMs ? 'ahead' : 'behind';
-    else if (t && ms > 0) tone = 'paused';
-    clock.className = 'clock ' + tone;
+    let look = 'idle';
+    if (t && isRunning()) look = t.estimateMs === undefined ? '' : ms <= t.estimateMs ? 'ahead' : 'behind';
+    else if (t && ms > 0) look = 'paused';
+    else if (recap) look = tone(recapDelta);
+    clock.className = 'clock ' + look;
+    sessionLine(now);
 
     if (isOpen()) {
       const delta = $('delta');

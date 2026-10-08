@@ -20,6 +20,8 @@ const OVERLAY_WIDTH = 340;
 let settings: Settings;
 let run: Run | null = null;
 let pastRuns: Run[] = [];
+/** The session you just ended, kept on the timer for its recap until you start a new one. */
+let lastRun: Run | null = null;
 
 let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
@@ -30,7 +32,7 @@ const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))] };
+  return { run, lastRun: run ? null : lastRun, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))] };
 }
 
 function broadcast() {
@@ -57,6 +59,7 @@ function ensureRun(): Run {
   if (!run) {
     run = newRun('manual');
     pastRuns = [run, ...pastRuns];
+    lastRun = null;
   }
   return run;
 }
@@ -67,6 +70,7 @@ async function endRun(now: number) {
   pause(run, now);
   run.endedAt ??= new Date(now).toISOString();
   await runStore.save(run);
+  lastRun = run;
   run = null;
 }
 

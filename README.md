@@ -24,6 +24,11 @@ task you're on and a big clock, `0:12:34.567`, in hours, minutes, seconds and mi
 The clock's color tells you how you're doing: white while it runs, green while you're under your
 estimate, red once you're over, grey while paused.
 
+Under it, the session line shows how long this session has run and how far you are against your
+estimates so far, for example `4:45 saved` in green or `2:03 over` in red. Finished tasks count their full
+difference; the task you're on only counts once it runs over. When every task is done, or you end the
+run, the big clock switches to the total time you saved (or lost) against your estimates.
+
 Click the clock to open the rest (drag it to move it):
 
 - **Estimate**: pick 5m, 10m, 15m, 25m, 45m, 1h, 1h30m or 2h, or type any time. The panel shows how much

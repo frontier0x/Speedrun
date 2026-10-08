@@ -192,6 +192,21 @@ export function runEstimate(run: Run): number | undefined {
   return ests.every((e) => e === undefined) ? undefined : ests.reduce<number>((a, e) => a + (e ?? 0), 0);
 }
 
+/**
+ * How far the session is ahead of or behind your estimates, like a speedrun's running delta. Finished tasks
+ * count their full difference; the running task only counts once it's over (until then it could still come
+ * in under). Negative means time saved. Tasks without an estimate don't count. Undefined if nothing compares.
+ */
+export function sessionDelta(run: Run, now = Date.now()): number | undefined {
+  let delta: number | undefined;
+  for (const t of run.tasks) {
+    if (t.estimateMs === undefined || isSection(run, t)) continue;
+    const over = liveElapsed(run, t, now) - t.estimateMs;
+    if (t.done || over > 0) delta = (delta ?? 0) + over;
+  }
+  return delta;
+}
+
 /** Projected finish: time spent plus what's left by estimate (or by time already spent if over). */
 export function projectedRemaining(run: Run, now = Date.now()): number {
   return run.tasks
@@ -319,6 +334,8 @@ export interface RunSummary {
   tasksTotal: number;
   /** Share of finished, estimated tasks that came in at or under estimate. */
   onEstimateRate?: number;
+  /** Time against your estimates; negative means saved. See sessionDelta. */
+  deltaMs?: number;
 }
 
 export function summarize(run: Run, now = Date.now()): RunSummary {
@@ -335,5 +352,6 @@ export function summarize(run: Run, now = Date.now()): RunSummary {
     tasksDone: leaves.filter((t) => t.done).length,
     tasksTotal: leaves.length,
     onEstimateRate: estimated.length ? estimated.filter((t) => t.elapsedMs <= t.estimateMs!).length / estimated.length : undefined,
+    deltaMs: sessionDelta(run, now),
   };
 }
