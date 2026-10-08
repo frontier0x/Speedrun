@@ -8,12 +8,16 @@
   <link rel="stylesheet" href="settings.css" />
 </head>
 <body>
-  <div class="titlebar"></div>
+  <div class="titlebar"><span>Settings</span></div>
+  <nav class="tabs" id="tabs">
+    <button type="button" data-tab="timer">Timer</button>
+    <button type="button" data-tab="look">Look</button>
+    <button type="button" data-tab="colors">Colors</button>
+    <button type="button" data-tab="keys">Keys</button>
+  </nav>
   <main>
-    <h1>Settings</h1>
 
-    <section>
-      <h2>Look</h2>
+    <section data-tab="look">
       <div class="field">
         <label>Mode</label>
         <div class="seg" id="theme">
@@ -40,29 +44,27 @@
       </div>
     </section>
 
-    <section>
+    <section data-tab="colors">
       <div class="section-head">
-        <h2>Colors</h2>
+        <span class="hint">Editing colors for</span>
         <div class="seg small" id="colorMode">
           <button data-v="light" type="button">Day</button>
           <button data-v="dark" type="button">Night</button>
         </div>
       </div>
-      <p class="hint">Click a color to change it. Use a solid color or a gradient, and type any hex like #3fd68a or #00000080 (the last two digits are opacity).</p>
+      <p class="hint">Click a color to change it: solid or gradient, any hex like #3fd68a or #00000080.</p>
       <div class="colors" id="colors"></div>
       <button class="link" id="resetColors" type="button">Reset all colors for this mode</button>
     </section>
 
-    <section>
-      <h2>Timer</h2>
+    <section data-tab="timer">
       <label class="toggle"><input type="checkbox" id="countdown" />
         <span><b>Countdown</b>The task clock counts down from your estimate, then into the red.</span></label>
       <label class="toggle"><input type="checkbox" id="pausesCount" />
         <span><b>Count pauses in the session</b>Off: the session clock stops while you pause.</span></label>
     </section>
 
-    <section>
-      <h2>Shortcuts</h2>
+    <section data-tab="keys">
       <dl class="keys">
         <dt>⌘⇧Space</dt><dd>Go / Pause, from any app</dd>
         <dt>⌘⇧↩</dt><dd>Done: finish the task, start the next</dd>

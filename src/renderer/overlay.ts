@@ -239,18 +239,20 @@ function row(run: Run, t: Task, current: boolean): HTMLLIElement {
   };
   li.append(box, name);
 
+  const spent = t.done ? t.elapsedMs : liveElapsed(run, t);
   if (t.done) {
     // Finished: time, delta against the estimate, gold on a new best.
     const best = golds.get(taskKey(t.title));
     const gold = best !== undefined && t.elapsedMs <= best;
-    li.append(el('span', 'num' + (gold ? ' gold' : ''), formatDuration(t.elapsedMs)));
+    li.append(timeCell(t, spent, 'num' + (gold ? ' gold' : '')));
     if (t.estimateMs !== undefined) {
       const d = t.elapsedMs - t.estimateMs;
       li.append(el('span', 'num ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
     }
+    li.title = 'Click to pick this task back up';
+    li.onclick = () => void api.act({ type: 'reopen', id: t.id });
   } else {
-    const spent = liveElapsed(run, t);
-    if (spent >= 1000 && !current) li.append(el('span', 'num', formatDuration(spent)));
+    if (spent >= 1000 || current) li.append(timeCell(t, spent, 'num'));
     const est = el('button', 'est', t.estimateMs !== undefined ? formatEstimate(t.estimateMs) : 'estimate');
     est.type = 'button';
     est.title = 'How long do you think this takes?';
@@ -260,8 +262,10 @@ function row(run: Run, t: Task, current: boolean): HTMLLIElement {
       render();
     };
     li.append(est);
-    li.title = current ? '' : 'Click to switch to this task';
-    li.onclick = () => !current && void api.act({ type: 'start', id: t.id });
+    // Click a task to work on it; click the current one while paused to carry on.
+    const runningThis = current && isRunning();
+    li.title = runningThis ? '' : current ? 'Click to carry on' : 'Click to switch to this task';
+    li.onclick = () => !runningThis && void api.act(current ? { type: 'togglePause' } : { type: 'start', id: t.id });
   }
 
   const x = el('button', 'x', '×');
@@ -287,6 +291,39 @@ function row(run: Run, t: Task, current: boolean): HTMLLIElement {
     if (dragId && dragId !== t.id) void api.act({ type: 'move', id: dragId, beforeId: t.id });
   };
   return li;
+}
+
+/** A task's time. Click it to correct it: 12:30, 1:02:03 or 25m. */
+function timeCell(t: Task, ms: number, cls: string): HTMLElement {
+  const cell = el('button', cls + ' time-edit', formatDuration(ms));
+  cell.type = 'button';
+  cell.dataset.time = t.id;
+  cell.title = 'Click to correct this time';
+  cell.onclick = (e) => {
+    e.stopPropagation();
+    editing = true;
+    const input = el('input', 'time-input');
+    input.value = formatDuration(t.done || !state.run ? t.elapsedMs : liveElapsed(state.run, t));
+    input.title = 'e.g. 12:30, 1:02:03 or 25m. Enter to save, Esc to cancel.';
+    cell.replaceWith(input);
+    input.focus();
+    input.select();
+    let closed = false;
+    const finish = (save: boolean) => {
+      if (closed) return;
+      closed = true;
+      editing = false;
+      if (save && input.value.trim()) void api.act({ type: 'setTime', id: t.id, text: input.value });
+      else render();
+    };
+    input.onclick = (k) => k.stopPropagation();
+    input.onkeydown = (k) => {
+      if (k.key === 'Enter') finish(true);
+      if (k.key === 'Escape') finish(false);
+    };
+    input.onblur = () => finish(true);
+  };
+  return cell;
 }
 
 // ---------- the clock ----------
@@ -328,6 +365,11 @@ function frame() {
     }
 
     if (isOpen()) {
+      // Times in the list tick along too.
+      for (const c of document.querySelectorAll<HTMLElement>('.list [data-time]')) {
+        const task = run?.tasks.find((x) => x.id === c.dataset.time);
+        if (run && task && !task.done) c.textContent = formatDuration(liveElapsed(run, task));
+      }
       const delta = $('delta');
       if (t?.estimateMs !== undefined && ms > 0) {
         const d = t.estimateMs - ms;
@@ -443,6 +485,11 @@ function wire() {
     paste.hidden = true;
   };
 
+  $('tipsOk').onclick = () => {
+    $('tips').hidden = true;
+    void api.act({ type: 'settings', patch: { onboarded: true } });
+    $('addInput').focus();
+  };
   $('statsBtn').onclick = () => void api.act({ type: 'openDashboard' });
   $('settingsBtn').onclick = () => void api.act({ type: 'openSettings' });
 
@@ -501,4 +548,9 @@ api.onState((s) => {
 });
 state = await api.getState();
 render();
+// First start: open up with the tips.
+if (!state.settings.onboarded && !state.finished) {
+  $('tips').hidden = false;
+  setOpen(true);
+}
 requestAnimationFrame(frame);

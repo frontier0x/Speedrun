@@ -16,6 +16,8 @@ export type Action =
   | { type: 'importFile' }
   | { type: 'start'; id: string }
   | { type: 'toggleDone'; id: string }
+  | { type: 'reopen'; id: string }
+  | { type: 'setTime'; id: string; text: string }
   | { type: 'split' }
   | { type: 'togglePause' }
   | { type: 'remove'; id: string }

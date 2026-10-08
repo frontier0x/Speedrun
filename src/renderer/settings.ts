@@ -322,3 +322,24 @@ api.onState((s) => {
   state = s;
   renderBasics();
 });
+
+// ---------- tabs ----------
+
+/** One tab at a time, so the window stays small. Remembers the last one you looked at. */
+function showTab(tab: string) {
+  for (const b of document.querySelectorAll<HTMLElement>('#tabs [data-tab]')) b.classList.toggle('on', b.dataset.tab === tab);
+  for (const sec of document.querySelectorAll<HTMLElement>('main section[data-tab]')) sec.hidden = sec.dataset.tab !== tab;
+  try {
+    localStorage.setItem('speedrun.settingsTab', tab);
+  } catch {
+    // remembering the tab is a nicety
+  }
+}
+for (const b of document.querySelectorAll<HTMLElement>('#tabs [data-tab]')) b.onclick = () => showTab(b.dataset.tab!);
+let firstTab = 'timer';
+try {
+  firstTab = localStorage.getItem('speedrun.settingsTab') ?? 'timer';
+} catch {
+  // first visit
+}
+showTab(firstTab);

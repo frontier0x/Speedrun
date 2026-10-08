@@ -93,7 +93,7 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .facts dd { margin: 2px 0 0; font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; }
 
 /* ---------- more ---------- */
-.more { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 12px; }
+.more { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 9px; }
 .estimate-row { display: flex; align-items: baseline; gap: 10px; margin-top: -2px; }
 .estimate { padding: 3px 9px; border-radius: 999px; font-size: 12px; background: var(--faint); border: none; }
 .estimate:hover { background: var(--hover); }
@@ -108,8 +108,14 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .picker input { width: 72px; padding: 4px 9px; border-radius: 999px; font-size: 12px; }
 .picker .clear { color: var(--dim); }
 
+.tips { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--faint); font-size: 12px; color: var(--dim); }
+.tips b { color: var(--clock); font-size: 13px; font-weight: 600; }
+.tips ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.tips kbd { font-family: inherit; font-size: 11px; padding: 0 5px; border-radius: 4px; background: var(--faint); color: var(--clock); white-space: nowrap; }
+.tips .act { align-self: flex-start; }
+
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.act { padding: 8px 0; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--faint); border: none; }
+.act { padding: 6px 0; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--faint); border: none; }
 .act:hover { background: var(--hover); }
 .act.primary { background: var(--button-fill); color: var(--button-ink); }
 .act.primary:hover { filter: brightness(1.08); background: var(--button-fill); }
@@ -117,8 +123,8 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .act:disabled { opacity: 0.35; cursor: default; }
 
 /* Splits, like a speedrun timer: name, estimate, time, delta. */
-.list { list-style: none; margin: 0 -8px; padding: 0; max-height: 320px; overflow-y: auto; }
-.list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.list { list-style: none; margin: 0 -8px; padding: 0; max-height: 186px; overflow-y: auto; }
+.list li { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
 .list li:hover, .list li.current { background: var(--faint); }
 .list li.section { cursor: default; color: var(--dim); font-size: 11px; padding-top: 10px; }
 .list li.section:hover { background: none; }
@@ -135,6 +141,10 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .list .num.ahead { color: var(--ahead); }
 .list .num.behind { color: var(--behind); }
 .list .num.gold { color: var(--gold); }
+/* A task's time is a quiet button: click to correct it. */
+.list .time-edit { padding: 1px 4px; margin: -1px -4px; border: none; border-radius: 5px; background: none; }
+.list .time-edit:hover { background: var(--faint); color: var(--clock); }
+.list .time-input { width: 74px; padding: 2px 6px; font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
 .list .est { font-size: 11px; color: var(--dim); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--faint); background: none; }
 .list .est:hover { color: var(--clock); border-color: var(--dim); }
 .list .x { opacity: 0; color: var(--dim); background: none; border: none; padding: 0 2px; font-size: 14px; }

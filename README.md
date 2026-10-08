@@ -57,6 +57,13 @@ Click the clock to open the rest (drag it to move it):
 Speedrun doesn't watch your screen, read your apps or send anything anywhere. It's just a timer, and it
 needs no macOS permissions.
 
+## Fixing things up
+
+- **Pick a task back up**: click a finished task and its clock runs on from where it stopped. Click the
+  current task while paused to carry on.
+- **Correct a time**: forgot to start or pause? Click a task's time in the list and type the right one,
+  e.g. `12:30`, `1:02:03` or `25m`. A running task keeps running from there.
+
 ## Dashboard
 
 Open it from the timer (Stats) or the menu bar. It shows every previous run with its splits, estimates vs

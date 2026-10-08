@@ -51,6 +51,8 @@ export interface Settings {
   precision: 'ms' | 's' | 'm';
   /** Size of the floating timer, 1 = normal. */
   scale: number;
+  /** The first-start tips have been seen. */
+  onboarded: boolean;
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
@@ -64,6 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clockWeight: 400,
   precision: 'ms',
   scale: 1,
+  onboarded: false,
 };
 
 export const MIN_SCALE = 0.6;
@@ -75,6 +78,18 @@ export const ACCENTS = ['#e8e8e8', '#7c5cff', '#22c55e', '#f59e0b', '#ef4444', '
 export const newId = () => Math.random().toString(36).slice(2, 10);
 
 // ---------- durations ----------
+
+/** A time you type to correct a task: clock style "1:02:03" or "12:30" (m:ss), or a duration like "25m". */
+export function parseTimeInput(text: string): number | undefined {
+  const t = text.trim();
+  const clock = /^(\d+):(\d{1,2})(?::(\d{1,2}))?$/.exec(t);
+  if (clock) {
+    const [a, b, c] = [clock[1], clock[2], clock[3]].map((x) => (x === undefined ? undefined : Number(x)));
+    if (b! > 59 || (c ?? 0) > 59) return undefined;
+    return c === undefined ? (a! * 60 + b!) * 1000 : (a! * 3600 + b! * 60 + c) * 1000;
+  }
+  return parseDuration(t);
+}
 
 /** Parses "25m", "1h", "1h30m", "1.5h", "90s", "45" (minutes). Returns ms or undefined. */
 export function parseDuration(text: string): number | undefined {
@@ -290,6 +305,27 @@ export function startTask(run: Run, id: string, now = Date.now()): Run {
   run.activeTaskId = id;
   run.activeSince = now;
   return run;
+}
+
+/** Sets a task's time, e.g. when you forgot to start or pause. A running task keeps running from there. */
+export function setElapsed(run: Run, id: string, ms: number, now = Date.now()): Run {
+  const t = run.tasks.find((x) => x.id === id);
+  if (!t) return run;
+  const running = run.activeTaskId === id && run.activeSince !== undefined;
+  if (running) stopClock(run, now);
+  t.elapsedMs = Math.max(0, ms);
+  if (running) run.activeSince = now;
+  return run;
+}
+
+/** Picks a finished task back up: it's open again and its clock runs on from where it stopped. */
+export function reopenTask(run: Run, id: string, now = Date.now()): Run {
+  const t = run.tasks.find((x) => x.id === id);
+  if (!t) return run;
+  t.done = false;
+  t.doneAt = undefined;
+  run.endedAt = undefined;
+  return startTask(run, id, now);
 }
 
 /** Stops the clock. Pausing a running task starts counting pause time. */
