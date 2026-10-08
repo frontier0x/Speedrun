@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   addTasks, completeActive, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
-  pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate,
+  pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate, parseTimeInput, reopenTask, setElapsed,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -128,4 +128,28 @@ test('counts pause time and leaves it out of the session unless asked', () => {
   startTask(run, run.tasks[1].id, 23 * MIN); // switching tasks ends the pause too
   assert.equal(run.pausedSince, undefined);
   assert.equal(pausedTotal(run, 30 * MIN), 8 * MIN);
+});
+
+test('parses corrected times', () => {
+  assert.equal(parseTimeInput('12:30'), (12 * 60 + 30) * 1000);
+  assert.equal(parseTimeInput('1:02:03'), (3600 + 120 + 3) * 1000);
+  assert.equal(parseTimeInput('25m'), 25 * MIN);
+  assert.equal(parseTimeInput('12:75'), undefined);
+  assert.equal(parseTimeInput('soon'), undefined);
+});
+
+test('correcting a time keeps a running task running, and finished tasks can be picked back up', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- A 10m\n- B'));
+  const [a, b] = run.tasks;
+  startTask(run, a.id, 0);
+  setElapsed(run, a.id, 5 * MIN, 2 * MIN); // forgot to start 3 minutes earlier
+  assert.equal(totalElapsed(run, a, 3 * MIN), 6 * MIN);
+  completeActive(run, 3 * MIN);
+  assert.equal(a.done, true);
+  reopenTask(run, a.id, 10 * MIN);
+  assert.equal(a.done, false);
+  assert.equal(run.activeTaskId, a.id);
+  assert.equal(totalElapsed(run, a, 11 * MIN), 7 * MIN);
+  assert.equal(b.elapsedMs, 7 * MIN); // B ran from 3 to 10 before A was picked back up
 });

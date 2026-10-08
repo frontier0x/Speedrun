@@ -1,6 +1,6 @@
 {
   "name": "speedrun",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Speedrun your day: a floating timer for your task list, with estimates and best times.",
   "license": "MIT",
   "type": "module",

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
   addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
-  parseTaskList, pause, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
+  parseTaskList, parseTimeInput, pause, reopenTask, setElapsed, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
 } from './runs.js';
 import { RunStore } from './runStore.js';
 
@@ -99,6 +99,14 @@ async function act(a: Action) {
     case 'toggleDone':
       if (run) toggleDone(run, a.id, now);
       break;
+    case 'reopen':
+      if (run) reopenTask(run, a.id, now);
+      break;
+    case 'setTime': {
+      const ms = parseTimeInput(a.text);
+      if (run && ms !== undefined) setElapsed(run, a.id, ms, now);
+      break;
+    }
     case 'split':
       if (run) completeActive(run, now);
       break;
@@ -254,7 +262,7 @@ function openDashboard() {
     minHeight: 520,
     title: 'Speedrun',
     titleBarStyle: 'hiddenInset',
-    backgroundColor: '#0a0a0a',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#fbfbf8',
     webPreferences: { preload, contextIsolation: true, sandbox: true },
   });
   void dashboard.loadFile(join(staticDir, 'dashboard.html'));
@@ -270,10 +278,12 @@ function openSettings() {
     return;
   }
   settingsWin = new BrowserWindow({
-    width: 460,
-    height: 760,
-    minWidth: 400,
-    minHeight: 480,
+    width: 340,
+    height: 470,
+    minWidth: 320,
+    minHeight: 360,
+    maximizable: false,
+    fullscreenable: false,
     title: 'Speedrun Settings',
     titleBarStyle: 'hiddenInset',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#111111' : '#f6f6f4',

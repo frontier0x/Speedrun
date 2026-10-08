@@ -1,4 +1,5 @@
 import type { AppState, SpeedrunApi } from '../api.js';
+import { palette, paletteVars, paintSolid, resolveMode } from '../theme.js';
 import {
   formatDuration, formatEstimate, isSection, isSectionDone, runElapsed, summarize, taskKey, totalElapsed, totalEstimate,
   type Run, type RunSummary, type Task,
@@ -201,9 +202,26 @@ function taskRow(run: Run, t: Task) {
   return tr;
 }
 
+const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+let lastState: AppState | undefined;
+
+/** The dashboard wears the timer's colors: day or night, your palette. */
+function applyTheme(s: AppState) {
+  lastState = s;
+  const mode = resolveMode(s.settings.theme, darkQuery.matches);
+  const colors = palette(mode, s.settings.colors);
+  const root = document.documentElement.style;
+  for (const [k, v] of Object.entries(paletteVars(colors))) root.setProperty(k, v);
+  // A window needs a solid base under a see-through or gradient background.
+  root.setProperty('--bg-solid', paintSolid(colors.background).slice(0, 7));
+  root.setProperty('--accent', paintSolid(colors.clock));
+  root.colorScheme = mode;
+}
+darkQuery.addEventListener('change', () => lastState && applyTheme(lastState));
+
 async function load(state?: AppState) {
   const s = state ?? (await api.getState());
-  document.documentElement.style.setProperty('--accent', s.settings.accent);
+  applyTheme(s);
   golds = new Map(s.golds);
   liveRunId = s.run?.id ?? null;
   const data = await api.listRuns();
