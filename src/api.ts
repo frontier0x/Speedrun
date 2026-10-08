@@ -24,11 +24,15 @@ export type Action =
   | { type: 'rename'; id: string; title: string }
   | { type: 'settings'; patch: Partial<Settings> }
   | { type: 'endRun' }
-  | { type: 'fitHeight'; height: number }
-  | { type: 'moveBy'; dx: number; dy: number }
+  | { type: 'fitSize'; width: number; height: number }
+  | { type: 'dragStart'; mode: 'move' | 'resize' }
+  | { type: 'dragMove' }
+  | { type: 'dragEnd' }
   | { type: 'openDashboard' }
   | { type: 'hideOverlay' }
-  | { type: 'dismissSummary' };
+  | { type: 'dismissSummary' }
+  | { type: 'openSettings' }
+  | { type: 'quit' };
 
 export interface SpeedrunApi {
   getState(): Promise<AppState>;

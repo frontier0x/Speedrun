@@ -1,10 +1,10 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, screen, Tray } from 'electron';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
-  addTasks, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
+  addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
   parseTaskList, pause, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
 } from './runs.js';
 import { RunStore } from './runStore.js';
@@ -25,6 +25,8 @@ let pastRuns: Run[] = [];
 let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
 let dashboard: BrowserWindow | null = null;
+let settingsWin: BrowserWindow | null = null;
+let drag: { mode: 'move' | 'resize'; cursor: Electron.Point; bounds: Electron.Rectangle; scale: number } | null = null;
 
 const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 
@@ -36,7 +38,7 @@ function state(): AppState {
 
 function broadcast() {
   const s = state();
-  for (const w of [overlay, dashboard]) if (w && !w.isDestroyed()) w.webContents.send('state', s);
+  for (const w of [overlay, dashboard, settingsWin]) if (w && !w.isDestroyed()) w.webContents.send('state', s);
   refreshTray();
 }
 
@@ -121,7 +123,9 @@ async function act(a: Action) {
     }
     case 'settings':
       settings = { ...settings, ...a.patch };
-      if (a.patch.opacity !== undefined) overlay?.setOpacity(settings.opacity);
+      if (a.patch.scale !== undefined) settings.scale = clampScale(a.patch.scale);
+      if (a.patch.scale !== undefined) overlay?.webContents.setZoomFactor(settings.scale);
+      if (a.patch.theme !== undefined) nativeTheme.themeSource = settings.theme;
       persistSettings();
       break;
     case 'endRun':
@@ -130,19 +134,48 @@ async function act(a: Action) {
     case 'dismissSummary':
       finished = null;
       break;
-    case 'moveBy':
-      if (overlay && !overlay.isDestroyed()) {
-        const [x, y] = overlay.getPosition();
-        overlay.setPosition(Math.round(x + a.dx), Math.round(y + a.dy));
-        saveOverlayPosition();
+    // Dragging reads the cursor here, in screen pixels, so it works at any zoom.
+    case 'dragStart':
+      if (overlay && !overlay.isDestroyed())
+        drag = { mode: a.mode, cursor: screen.getCursorScreenPoint(), bounds: overlay.getBounds(), scale: settings.scale };
+      return;
+    case 'dragMove': {
+      if (!drag || !overlay || overlay.isDestroyed()) return;
+      const p = screen.getCursorScreenPoint();
+      const dx = p.x - drag.cursor.x;
+      const dy = p.y - drag.cursor.y;
+      if (drag.mode === 'move') overlay.setPosition(Math.round(drag.bounds.x + dx), Math.round(drag.bounds.y + dy));
+      else {
+        const scale = clampScale((drag.scale * (drag.bounds.width + dx)) / drag.bounds.width);
+        if (scale !== settings.scale) {
+          settings = { ...settings, scale };
+          overlay.webContents.setZoomFactor(scale);
+        }
       }
       return;
-    case 'fitHeight':
+    }
+    case 'dragEnd':
+      if (drag?.mode === 'resize') persistSettings();
+      else saveOverlayPosition();
+      drag = null;
+      break;
+    case 'fitSize':
+      // The overlay reports its size in CSS pixels; the window is that times the zoom.
       if (overlay && !overlay.isDestroyed()) {
         const b = overlay.getBounds();
-        const height = Math.max(40, Math.min(720, Math.ceil(a.height)));
-        if (b.height !== height) overlay.setBounds({ ...b, height });
+        const width = Math.max(80, Math.min(1200, Math.ceil(a.width * settings.scale)));
+        const height = Math.max(40, Math.min(1400, Math.ceil(a.height * settings.scale)));
+        // Grow toward the middle of the screen, so a timer parked on the right edge stays on screen.
+        const area = screen.getDisplayMatching(b).workArea;
+        const x = drag?.mode !== 'resize' && b.x + b.width / 2 > area.x + area.width / 2 ? b.x + b.width - width : b.x;
+        if (b.width !== width || b.height !== height) overlay.setBounds({ x, y: b.y, width, height });
       }
+      return;
+    case 'openSettings':
+      openSettings();
+      return;
+    case 'quit':
+      app.quit();
       return;
     case 'openDashboard':
       openDashboard();
@@ -183,7 +216,7 @@ function createOverlay() {
   });
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  overlay.setOpacity(settings.opacity);
+  overlay.webContents.on('did-finish-load', () => overlay?.webContents.setZoomFactor(settings.scale));
   void overlay.loadFile(join(staticDir, 'overlay.html'));
   overlay.once('ready-to-show', () => overlay?.showInactive());
 
@@ -227,7 +260,37 @@ function openDashboard() {
   void dashboard.loadFile(join(staticDir, 'dashboard.html'));
   dashboard.on('closed', () => (dashboard = null));
   app.dock?.show();
-  dashboard.on('closed', () => app.dock?.hide());
+  dashboard.on('closed', hideDockIfNoWindows);
+}
+
+function openSettings() {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.show();
+    settingsWin.focus();
+    return;
+  }
+  settingsWin = new BrowserWindow({
+    width: 460,
+    height: 760,
+    minWidth: 400,
+    minHeight: 480,
+    title: 'Speedrun Settings',
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#111111' : '#f6f6f4',
+    webPreferences: { preload, contextIsolation: true, sandbox: true },
+  });
+  void settingsWin.loadFile(join(staticDir, 'settings.html'));
+  settingsWin.on('closed', () => (settingsWin = null));
+  app.dock?.show();
+  settingsWin.on('closed', hideDockIfNoWindows);
+}
+
+/** The Dock icon shows only while a regular window (Stats, Settings) is open. */
+function hideDockIfNoWindows() {
+  setTimeout(() => {
+    const open = [dashboard, settingsWin].some((w) => w && !w.isDestroyed());
+    if (!open) app.dock?.hide();
+  }, 0);
 }
 
 // ---------- tray ----------
@@ -245,6 +308,7 @@ function buildMenu() {
     Menu.buildFromTemplate([
       { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Alt+Shift+Space', click: toggleOverlay },
       { label: 'Dashboard', click: openDashboard },
+      { label: 'Settings…', click: openSettings },
       { type: 'separator' },
       { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
       { label: 'End session', click: () => void act({ type: 'endRun' }) },
@@ -273,6 +337,8 @@ app.whenReady().then(async () => {
   // No Dock icon, so the panel can float over full-screen apps; the menu bar icon is the way in.
   app.dock?.hide();
   settings = await runStore.loadSettings();
+  settings.scale = clampScale(settings.scale);
+  nativeTheme.themeSource = settings.theme;
   pastRuns = await runStore.list();
   const today = new Date().toLocaleDateString('sv-SE');
   const latest = pastRuns[0];

@@ -34,6 +34,13 @@ the open panel you can turn on **Countdown** (the task clock counts down from yo
 the red with a minus) and **Count pauses in the session** (off by default, so pauses don't add to the
 session time).
 
+Hover the timer for **–** (hide to the menu bar) and **×** (quit). Drag its bottom-right corner to make it
+bigger or smaller.
+
+**Settings** (in the open panel, or the menu bar icon) has day/night/auto mode, size, clock weight, whether
+the clock shows milliseconds and seconds, and every color. Each color can be solid or a gradient; type any
+hex like `#3fd68a` or `#00000080` (the last two digits are opacity), or start from a preset.
+
 Click the clock to open the rest (drag it to move it):
 
 - **Estimate**: pick 5m, 10m, 15m, 25m, 45m, 1h, 1h30m or 2h, or type any time. The panel shows how much

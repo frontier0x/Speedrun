@@ -1,130 +1,152 @@
 /* Speedrun timer. One loud thing, the clock; everything else stays quiet.
-   The clock's color is the information: white while running, green under your estimate,
-   red over it, gold on a new best, grey while paused. */
+   The clock's color is the information: neutral while running, "ahead" under your estimate,
+   "behind" over it, "gold" on a new best, "paused" while paused.
+   Every color comes from the palette (see src/theme.ts): --<name> is a solid color and
+   --<name>-fill the full paint, which may be a gradient. overlay.ts sets them on :root. */
 :root {
-  --clock: #f4f4f0;
-  --dim: #8b8b86;
-  --faint: rgba(255, 255, 255, 0.07);
-  --ahead: #3fd68a;
-  --behind: #ff5a4e;
-  --gold: #ffcf4a;
+  --background: #000000e6; --background-fill: var(--background);
+  --text: #d6d6d1;
+  --clock: #f4f4f0; --clock-fill: var(--clock);
+  --ahead: #3fd68a; --ahead-fill: var(--ahead);
+  --behind: #ff5a4e; --behind-fill: var(--behind);
+  --paused: #8b8b86; --paused-fill: var(--paused);
+  --gold: #ffcf4a; --gold-fill: var(--gold);
+  --button: #f4f4f0; --button-fill: var(--button); --button-ink: #000;
+  --dim: color-mix(in srgb, var(--text) 58%, transparent);
+  --faint: color-mix(in srgb, var(--text) 9%, transparent);
+  --hover: color-mix(in srgb, var(--text) 15%, transparent);
+  --clock-weight: 400;
   --digits: ui-rounded, 'SF Pro Rounded', -apple-system, system-ui, sans-serif;
 }
-html, body { height: auto; background: transparent; overflow: hidden; }
+html, body { height: auto; background: transparent; overflow: hidden; color: var(--text); }
 .panel {
-  background: rgba(0, 0, 0, 0.9); border: 1px solid var(--faint); border-radius: 18px;
+  position: relative; background: var(--background-fill); border: 1px solid var(--faint); border-radius: 16px;
   backdrop-filter: blur(30px) saturate(1.4); overflow: hidden;
+  /* Closed, the timer is exactly as wide as its clock; open, it makes room for the list. */
+  width: max-content;
 }
+.panel.open { width: 320px; }
 .spacer { flex: 1; }
 .row { display: flex; align-items: center; gap: 14px; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--clock); outline-offset: 2px; }
+button { color: var(--text); }
+input, textarea { color: var(--text); background: var(--faint); border-color: transparent; }
+
+/* Big numbers: the paint is clipped to the digits, so gradients work too. */
+.clock {
+  --fill: var(--clock-fill);
+  background: var(--fill); -webkit-background-clip: text; background-clip: text; color: transparent;
+  font-family: var(--digits); font-variant-numeric: tabular-nums; font-weight: var(--clock-weight); letter-spacing: -0.03em;
+  font-size: 44px; line-height: 1.02; white-space: nowrap; width: max-content;
+}
+.clock .ms { font-size: 0.48em; letter-spacing: 0; opacity: 0.6; margin-left: 1px; }
+.clock.idle, .clock.paused { --fill: var(--paused-fill); }
+.clock.ahead { --fill: var(--ahead-fill); }
+.clock.behind { --fill: var(--behind-fill); }
+.clock.gold { --fill: var(--gold-fill); }
 
 /* ---------- face ---------- */
-.face { padding: 14px 18px 12px; cursor: default; }
+.face { padding: 10px 14px 10px; cursor: default; position: relative; }
 .task {
-  font-size: 13px; font-weight: 500; color: #d6d6d1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-bottom: 2px;
+  font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1px;
+  /* Never widens the timer: it takes the clock's width and cuts off with "…". */
+  width: 0; min-width: 100%; padding-right: 34px;
 }
 .task.empty { color: var(--dim); font-weight: 400; }
-.clock {
-  font-family: var(--digits); font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -0.02em;
-  font-size: 46px; line-height: 1; color: var(--clock); white-space: nowrap; transition: color 0.4s;
-}
-.clock .ms { font-size: 0.5em; font-weight: 500; letter-spacing: 0; opacity: 0.6; margin-left: 1px; }
-.clock.idle, .clock.paused { color: var(--dim); }
-.session .time.paused { color: var(--dim); }
-.clock.ahead { color: var(--ahead); }
-.clock.behind { color: var(--behind); }
-.clock.gold { color: var(--gold); }
 
-/* Session line under the task clock: total time today, and saved or lost against your estimates. */
-.session {
-  display: flex; align-items: baseline; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--faint);
-  font-size: 12px; color: var(--dim);
+/* Hide and quit, top right, only while you hover. */
+.winctl { position: absolute; top: 7px; right: 8px; display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+.panel:hover .winctl { opacity: 1; }
+.winctl button {
+  width: 16px; height: 16px; padding: 0; border: none; border-radius: 50%; background: var(--faint);
+  color: var(--dim); font-size: 11px; line-height: 16px; display: grid; place-items: center;
 }
-.session .time, .session .saved { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; }
-.session .time { color: #d6d6d1; transition: color 0.4s; }
+.winctl button:hover { background: var(--hover); color: var(--text); }
+.winctl .quit:hover { background: var(--behind); color: #fff; }
+
+/* Drag the corner to make the timer bigger or smaller. */
+.grip {
+  position: absolute; right: 2px; bottom: 2px; width: 14px; height: 14px; cursor: nwse-resize; opacity: 0;
+  transition: opacity 0.15s; z-index: 2;
+  background: linear-gradient(135deg, transparent 50%, var(--dim) 50%, var(--dim) 58%, transparent 58%, transparent 70%, var(--dim) 70%, var(--dim) 78%, transparent 78%);
+  border-bottom-right-radius: 14px;
+}
+.panel:hover .grip { opacity: 0.8; }
+
+/* Session line under the task clock: total time, and saved or lost against your estimates. */
+.session {
+  display: flex; align-items: baseline; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--faint);
+  font-size: 11px; color: var(--dim); white-space: nowrap;
+}
+.session .time, .session .saved { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 500; }
+.session .time { color: var(--text); }
 .session .ahead { color: var(--ahead); }
 .session .behind { color: var(--behind); }
-.session .saved { font-size: 12px; font-weight: 500; }
-.session .saved.paused { color: var(--dim); }
+.session .paused { color: var(--dim); }
+.session .saved { margin-left: 10px; }
 
 /* ---------- summary ---------- */
-.summary { padding: 14px 18px 14px; display: flex; flex-direction: column; gap: 4px; }
-.summary .clock.ahead { color: var(--ahead); }
-.summary .clock.behind { color: var(--behind); }
+.summary { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 4px; width: 320px; }
 .saved-label { font-size: 13px; color: var(--dim); margin-bottom: 8px; }
 .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; padding-top: 10px; border-top: 1px solid var(--faint); }
 .facts dt { font-size: 11px; color: var(--dim); }
-.facts dd { margin: 2px 0 0; font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; color: #d6d6d1; }
+.facts dd { margin: 2px 0 0; font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; }
 
 /* ---------- more ---------- */
-.more { padding: 0 18px 14px; display: flex; flex-direction: column; gap: 12px; }
+.more { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 12px; }
 .estimate-row { display: flex; align-items: baseline; gap: 10px; margin-top: -2px; }
-.estimate {
-  padding: 3px 9px; border-radius: 999px; font-size: 12px; color: #d6d6d1; background: var(--faint); border: none;
-}
-.estimate:hover { background: rgba(255, 255, 255, 0.12); }
+.estimate { padding: 3px 9px; border-radius: 999px; font-size: 12px; background: var(--faint); border: none; }
+.estimate:hover { background: var(--hover); }
 .estimate.unset { color: var(--dim); }
 .delta { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dim); }
 .delta.ahead { color: var(--ahead); }
 .delta.behind { color: var(--behind); }
 
 .picker { display: flex; flex-wrap: wrap; gap: 6px; }
-.picker button { padding: 4px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--faint); background: transparent; color: #d6d6d1; }
-.picker button:hover, .picker button.on { background: var(--clock); color: #000; border-color: transparent; }
+.picker button { padding: 4px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--faint); background: transparent; }
+.picker button:hover, .picker button.on { background: var(--button-fill); color: var(--button-ink); border-color: transparent; }
 .picker input { width: 72px; padding: 4px 9px; border-radius: 999px; font-size: 12px; }
 .picker .clear { color: var(--dim); }
 
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.act { padding: 8px 0; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--faint); border: none; color: var(--clock); }
-.act:hover { background: rgba(255, 255, 255, 0.12); }
-.act.primary { background: var(--clock); color: #000; }
-.act.primary:hover { background: #fff; }
+.act { padding: 8px 0; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--faint); border: none; }
+.act:hover { background: var(--hover); }
+.act.primary { background: var(--button-fill); color: var(--button-ink); }
+.act.primary:hover { filter: brightness(1.08); background: var(--button-fill); }
 .act.small { padding: 5px 12px; font-size: 12px; }
 .act:disabled { opacity: 0.35; cursor: default; }
 
 /* Splits, like a speedrun timer: name, estimate, time, delta. */
 .list { list-style: none; margin: 0 -8px; padding: 0; max-height: 320px; overflow-y: auto; }
 .list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
-.list li:hover { background: var(--faint); }
-.list li.current { background: var(--faint); }
+.list li:hover, .list li.current { background: var(--faint); }
 .list li.section { cursor: default; color: var(--dim); font-size: 11px; padding-top: 10px; }
 .list li.section:hover { background: none; }
-.list .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #d6d6d1; }
+.list .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list li.current .name { color: var(--clock); font-weight: 500; }
 .list li.done .name { color: var(--dim); }
 .list .box {
-  width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #5a5a56; flex: none; display: grid; place-items: center;
+  width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--dim); flex: none; display: grid; place-items: center;
   font-size: 9px; color: transparent;
 }
 .list .box:hover { border-color: var(--clock); }
-.list li.done .box { background: #5a5a56; border-color: #5a5a56; color: #000; }
+.list li.done .box { background: var(--dim); border-color: transparent; color: var(--background); }
 .list .num { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--dim); }
 .list .num.ahead { color: var(--ahead); }
 .list .num.behind { color: var(--behind); }
 .list .num.gold { color: var(--gold); }
-.list .est { font-size: 11px; color: var(--dim); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--faint); }
+.list .est { font-size: 11px; color: var(--dim); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--faint); background: none; }
 .list .est:hover { color: var(--clock); border-color: var(--dim); }
 .list .x { opacity: 0; color: var(--dim); background: none; border: none; padding: 0 2px; font-size: 14px; }
 .list li:hover .x { opacity: 1; }
 .list li.drop { box-shadow: inset 0 2px 0 var(--clock); }
 .list .row-picker { padding: 2px 8px 8px 32px; }
 .list .row-picker:hover { background: none; }
-.list .empty { color: var(--dim); cursor: default; }
-.list .empty:hover { background: none; }
 
-.add input { padding: 8px 10px; font-size: 13px; border-radius: 10px; background: var(--faint); border-color: transparent; }
-.add input:focus { border-color: #5a5a56; }
+.add input { padding: 8px 10px; font-size: 13px; border-radius: 10px; }
+.add input:focus { border-color: var(--dim); }
 .paste { display: flex; flex-direction: column; gap: 8px; }
 .paste textarea { font-size: 12px; line-height: 1.5; resize: none; border-radius: 10px; }
 button.text { padding: 0; border: none; background: none; font-size: 12px; color: var(--dim); }
 button.text:hover { color: var(--clock); background: none; }
-.foot { padding-top: 2px; }
-
-.settings { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--faint); }
-.toggle { display: flex; gap: 10px; align-items: flex-start; font-size: 12px; color: var(--dim); cursor: pointer; }
-.toggle b { display: block; font-weight: 500; color: #d6d6d1; margin-bottom: 1px; }
-.toggle input { width: auto; margin: 2px 0 0; accent-color: var(--ahead); }
-
-@media (prefers-reduced-motion: reduce) { .clock { transition: none; } }
+.foot { padding-top: 2px; gap: 12px; white-space: nowrap; }

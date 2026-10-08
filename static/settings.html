@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Speedrun Settings</title>
+  <link rel="stylesheet" href="common.css" />
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <div class="titlebar"></div>
+  <main>
+    <h1>Settings</h1>
+
+    <section>
+      <h2>Look</h2>
+      <div class="field">
+        <label>Mode</label>
+        <div class="seg" id="theme">
+          <button data-v="system" type="button">Auto</button>
+          <button data-v="light" type="button">Day</button>
+          <button data-v="dark" type="button">Night</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="scale">Size <span class="val" id="scaleVal"></span></label>
+        <input type="range" id="scale" min="60" max="200" step="5" />
+      </div>
+      <div class="field">
+        <label for="weight">Clock weight <span class="val" id="weightVal"></span></label>
+        <input type="range" id="weight" min="200" max="800" step="100" />
+      </div>
+      <div class="field">
+        <label>Clock shows</label>
+        <div class="seg" id="precision">
+          <button data-v="ms" type="button">0:00:00.000</button>
+          <button data-v="s" type="button">0:00:00</button>
+          <button data-v="m" type="button">0:00</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Colors</h2>
+        <div class="seg small" id="colorMode">
+          <button data-v="light" type="button">Day</button>
+          <button data-v="dark" type="button">Night</button>
+        </div>
+      </div>
+      <p class="hint">Click a color to change it. Use a solid color or a gradient, and type any hex like #3fd68a or #00000080 (the last two digits are opacity).</p>
+      <div class="colors" id="colors"></div>
+      <button class="link" id="resetColors" type="button">Reset all colors for this mode</button>
+    </section>
+
+    <section>
+      <h2>Timer</h2>
+      <label class="toggle"><input type="checkbox" id="countdown" />
+        <span><b>Countdown</b>The task clock counts down from your estimate, then into the red.</span></label>
+      <label class="toggle"><input type="checkbox" id="pausesCount" />
+        <span><b>Count pauses in the session</b>Off: the session clock stops while you pause.</span></label>
+    </section>
+
+    <section>
+      <h2>Shortcuts</h2>
+      <dl class="keys">
+        <dt>⌘⇧Space</dt><dd>Go / Pause, from any app</dd>
+        <dt>⌘⇧↩</dt><dd>Done: finish the task, start the next</dd>
+        <dt>⌘⇧N</dt><dd>Add a task</dd>
+        <dt>⌥⇧⌘Space</dt><dd>Show or hide the timer</dd>
+      </dl>
+      <p class="hint">Drag the timer's bottom-right corner to resize it. Hover it for the hide (–) and quit (×) buttons.</p>
+    </section>
+  </main>
+  <script type="module" src="../dist/renderer/settings.js"></script>
+</body>
+</html>

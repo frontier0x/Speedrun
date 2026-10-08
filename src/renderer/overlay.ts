@@ -3,6 +3,7 @@ import {
   formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, pausedTotal, sessionElapsed, taskKey, timeSaved,
   type Run, type Task,
 } from '../runs.js';
+import { palette, paletteVars, paintSolid, resolveMode } from '../theme.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -21,14 +22,40 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return e;
 }
 
-/** 1:02:03 and .456, the clock's two parts. Hours always show, so the width never jumps. */
-function clockParts(ms: number): [string, string] {
+/**
+ * The clock's two parts, e.g. 1:02:03 and .456. Hours always show, so the width never jumps.
+ * With less precision the small part is empty: 1:02:03 for seconds, 1:02 for minutes.
+ */
+function clockParts(ms: number, precision: 'ms' | 's' | 'm' = state?.settings.precision ?? 'ms'): [string, string] {
   const total = Math.max(0, Math.floor(ms));
   const h = Math.floor(total / 3_600_000);
   const m = Math.floor((total % 3_600_000) / 60_000);
   const s = Math.floor((total % 60_000) / 1000);
   const pad = (n: number) => String(n).padStart(2, '0');
+  if (precision === 'm') return [`${h}:${pad(m)}`, ''];
+  if (precision === 's') return [`${h}:${pad(m)}:${pad(s)}`, ''];
   return [`${h}:${pad(m)}:${pad(s)}`, '.' + String(total % 1000).padStart(3, '0')];
+}
+
+// ---------- theme ----------
+
+const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+
+/** Your colors for the current mode, as CSS variables on :root. */
+function applyTheme() {
+  const s = state.settings;
+  const colors = palette(resolveMode(s.theme, darkQuery.matches), s.colors);
+  const root = document.documentElement.style;
+  for (const [k, v] of Object.entries(paletteVars(colors))) root.setProperty(k, v);
+  root.setProperty('--button-ink', inkFor(paintSolid(colors.button)));
+  root.setProperty('--clock-weight', String(s.clockWeight));
+}
+
+/** Black or white, whichever reads better on the color. */
+function inkFor(hex: string): string {
+  const n = parseInt(hex.slice(1, 7), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#000' : '#fff';
 }
 
 /** The task on the clock: the running one, or the next one up. */
@@ -316,6 +343,7 @@ function frame() {
 
 function render() {
   golds = new Map(state.golds);
+  applyTheme();
   const fin = state.finished;
   $('summary').hidden = !fin;
   $('face').hidden = Boolean(fin);
@@ -333,11 +361,11 @@ function render() {
 
 function setOpen(open: boolean) {
   $('more').hidden = !open;
+  $('panel').classList.toggle('open', open);
   if (!open) {
     closePicker();
     pickerFor = null;
     $('paste').hidden = true;
-    $('settings').hidden = true;
   }
   render();
 }
@@ -345,22 +373,24 @@ function setOpen(open: boolean) {
 /** The face moves the window when dragged and opens or closes the panel when clicked. */
 function wireFace() {
   const face = $('face');
-  let start: { x: number; y: number; lastX: number; lastY: number } | null = null;
+  let start: { x: number; y: number } | null = null;
   let dragged = false;
   face.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
-    start = { x: e.screenX, y: e.screenY, lastX: e.screenX, lastY: e.screenY };
+    start = { x: e.screenX, y: e.screenY };
     dragged = false;
   });
   window.addEventListener('mousemove', (e) => {
     if (!start) return;
-    if (!dragged && Math.hypot(e.screenX - start.x, e.screenY - start.y) < 4) return;
-    dragged = true;
-    void api.act({ type: 'moveBy', dx: e.screenX - start.lastX, dy: e.screenY - start.lastY });
-    start.lastX = e.screenX;
-    start.lastY = e.screenY;
+    if (!dragged) {
+      if (Math.hypot(e.screenX - start.x, e.screenY - start.y) < 4) return;
+      dragged = true;
+      void api.act({ type: 'dragStart', mode: 'move' });
+    }
+    void api.act({ type: 'dragMove' });
   });
   window.addEventListener('mouseup', () => {
+    if (start && dragged) void api.act({ type: 'dragEnd' });
     if (start && !dragged) {
       setOpen(!isOpen());
       if (isOpen() && !currentTask()) $('addInput').focus();
@@ -414,16 +444,27 @@ function wire() {
   };
 
   $('statsBtn').onclick = () => void api.act({ type: 'openDashboard' });
-  $('settingsBtn').onclick = () => {
-    const box = $('settings');
-    box.hidden = !box.hidden;
-    $<HTMLInputElement>('setCountdown').checked = state.settings.countdown;
-    $<HTMLInputElement>('setPauses').checked = state.settings.pausesCount;
-  };
-  $<HTMLInputElement>('setCountdown').onchange = (e) =>
-    void api.act({ type: 'settings', patch: { countdown: (e.target as HTMLInputElement).checked } });
-  $<HTMLInputElement>('setPauses').onchange = (e) =>
-    void api.act({ type: 'settings', patch: { pausesCount: (e.target as HTMLInputElement).checked } });
+  $('settingsBtn').onclick = () => void api.act({ type: 'openSettings' });
+
+  // Hide to the menu bar, or quit. They sit on the face, so keep their clicks from opening it.
+  for (const id of ['minBtn', 'quitBtn']) $(id).addEventListener('mousedown', (e) => e.stopPropagation());
+  $('minBtn').onclick = () => void api.act({ type: 'hideOverlay' });
+  $('quitBtn').onclick = () => void api.act({ type: 'quit' });
+
+  // Drag the corner to resize: the whole timer scales, so it stays sharp at any size.
+  $('grip').addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void api.act({ type: 'dragStart', mode: 'resize' });
+    const move = () => void api.act({ type: 'dragMove' });
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      void api.act({ type: 'dragEnd' });
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  });
   $('summaryStats').onclick = () => void api.act({ type: 'openDashboard' });
   $('newSession').onclick = async () => {
     await api.act({ type: 'dismissSummary' });
@@ -431,7 +472,6 @@ function wire() {
     $('addInput').focus();
   };
   $('endBtn').onclick = () => void api.act({ type: 'endRun' });
-  $('hideBtn').onclick = () => void api.act({ type: 'hideOverlay' });
 
   api.onFocusAdd(() => {
     setOpen(true);
@@ -449,7 +489,9 @@ function wire() {
   });
 
   // The window is always exactly as tall as what's showing.
-  new ResizeObserver(() => void api.act({ type: 'fitHeight', height: $('panel').offsetHeight })).observe($('panel'));
+  const panel = $('panel');
+  new ResizeObserver(() => void api.act({ type: 'fitSize', width: panel.offsetWidth, height: panel.offsetHeight })).observe(panel);
+  darkQuery.addEventListener('change', () => state && applyTheme());
 }
 
 wire();
