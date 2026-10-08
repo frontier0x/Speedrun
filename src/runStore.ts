@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DEFAULT_SETTINGS, type Run, type Settings } from './runs.js';
+import { clampScale, DEFAULT_SETTINGS, type Run, type Settings } from './runs.js';
+import { normalizeTheme } from './theme.js';
 
 /** Runs live in runs/YYYY-MM-DD/run-<id>.json. Settings in settings.json. */
 export class RunStore {
@@ -59,7 +60,8 @@ export class RunStore {
     try {
       // `mode` and `focusTracking` are left over from removed tracking features.
       const { mode: _mode, focusTracking: _focus, ...saved } = JSON.parse(await readFile(this.settingsPath, 'utf8'));
-      return { ...DEFAULT_SETTINGS, ...saved };
+      const merged = { ...DEFAULT_SETTINGS, ...saved };
+      return { ...merged, theme: normalizeTheme(saved.theme), scale: clampScale(merged.scale) };
     } catch {
       return { ...DEFAULT_SETTINGS };
     }

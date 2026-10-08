@@ -9,22 +9,28 @@
 </head>
 <body>
   <main class="panel" id="panel">
+    <div class="winctl" id="winctl">
+      <button id="minBtn" type="button" title="Hide the timer. Bring it back from the menu bar or with ⌥⇧⌘Space.">–</button>
+      <button id="quitBtn" type="button" title="Quit Speedrun">×</button>
+    </div>
+    <div class="grip" id="grip" title="Drag to make the timer bigger or smaller"></div>
+
     <!-- The face: all you see when collapsed. Drag it to move, click it to open. -->
     <section class="face" id="face" title="Click to open, drag to move">
       <div class="task" id="task"></div>
-      <div class="clock" id="clock"><span id="hms">0:00:00</span><span class="ms" id="ms">.000</span></div>
+      <div class="clock paint" id="clock"><span id="hms">0:00:00</span><span class="ms" id="ms">.000</span></div>
       <div class="session" id="session" hidden>
         <span class="label">Session</span>
-        <span class="time" id="sessionTime">0:00:00</span>
+        <span class="time paint" id="sessionTime">0:00:00</span>
         <span class="spacer"></span>
-        <span class="saved" id="sessionSaved"></span>
+        <span class="saved paint" id="sessionSaved"></span>
       </div>
     </section>
 
     <!-- Shown when a session ends: what you saved against your plan. -->
     <section class="summary" id="summary" hidden>
       <div class="task">Session done</div>
-      <div class="clock" id="savedClock"><span id="savedHms">0:00:00</span><span class="ms" id="savedMs">.000</span></div>
+      <div class="clock paint" id="savedClock"><span id="savedHms">0:00:00</span><span class="ms" id="savedMs">.000</span></div>
       <div class="saved-label" id="savedLabel"></div>
       <dl class="facts">
         <div><dt>Session</dt><dd id="factTotal"></dd></div>
@@ -43,7 +49,7 @@
     <section class="more" id="more" hidden>
       <div class="estimate-row">
         <button class="estimate" id="estimate" type="button"></button>
-        <span class="delta" id="delta"></span>
+        <span class="delta paint" id="delta"></span>
       </div>
       <div class="picker" id="picker" hidden></div>
 
@@ -69,10 +75,25 @@
       </div>
 
       <div class="settings" id="settings" hidden>
+        <h3>Clock</h3>
+        <label class="toggle"><input type="checkbox" id="setSeconds" />
+          <span><b>Show seconds</b>Off: hours and minutes only, e.g. 1:05.</span></label>
+        <label class="toggle"><input type="checkbox" id="setMs" />
+          <span><b>Show milliseconds</b>The small .000 after the seconds.</span></label>
         <label class="toggle"><input type="checkbox" id="setCountdown" />
           <span><b>Countdown</b>The task clock counts down from your estimate, then into the red.</span></label>
         <label class="toggle"><input type="checkbox" id="setPauses" />
           <span><b>Count pauses in the session</b>Off: the session clock stops while you pause.</span></label>
+        <h3>Size</h3>
+        <div class="segmented" id="sizes"></div>
+        <h3>Colors</h3>
+        <div class="segmented" id="appearance">
+          <button type="button" data-appearance="dark">Night</button>
+          <button type="button" data-appearance="light">Day</button>
+          <button type="button" data-appearance="system">Like my Mac</button>
+        </div>
+        <div class="presets" id="presets"></div>
+        <div class="roles" id="roles"></div>
       </div>
 
       <footer class="row foot">
@@ -81,7 +102,6 @@
         <button class="text" id="settingsBtn" type="button">Settings</button>
         <span class="spacer"></span>
         <button class="text" id="endBtn" type="button" title="Stop the clock and see what you saved">End session</button>
-        <button class="text" id="hideBtn" type="button" title="Hide (⌥⇧⌘Space)">Hide</button>
       </footer>
     </section>
   </main>

@@ -1,5 +1,7 @@
 // Pure run/task model shared by the main process, overlay and dashboard. No Node or Electron imports.
 
+import { DEFAULT_THEME, type Theme } from './theme.js';
+
 export type Mode = 'manual' | 'auto';
 
 export interface Task {
@@ -39,10 +41,28 @@ export interface Settings {
   countdown: boolean;
   /** Add pauses to the session time. Off: the session clock stops while you pause. */
   pausesCount: boolean;
+  /** Clock detail: seconds, and milliseconds after them. */
+  showSeconds: boolean;
+  showMs: boolean;
+  /** Size of the timer, 1 = normal. Drag its corner to change it. */
+  scale: number;
+  /** Every color, for day and night. See theme.ts. */
+  theme: Theme;
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
-export const DEFAULT_SETTINGS: Settings = { accent: '#e8e8e8', opacity: 0.96, countdown: false, pausesCount: false };
+export const DEFAULT_SETTINGS: Settings = {
+  accent: '#e8e8e8',
+  opacity: 0.96,
+  countdown: false,
+  pausesCount: false,
+  showSeconds: true,
+  showMs: true,
+  scale: 1,
+  theme: DEFAULT_THEME,
+};
+
+export const clampScale = (n: unknown) => (typeof n === 'number' && isFinite(n) ? Math.min(2, Math.max(0.6, n)) : 1);
 
 export const ACCENTS = ['#e8e8e8', '#7c5cff', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#e5e7eb'];
 

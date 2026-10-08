@@ -16,7 +16,7 @@ const preload = join(here, 'preload.cjs');
 const runsRoot = join(app.getPath('userData'), 'runs');
 const runStore = new RunStore(runsRoot, join(app.getPath('userData'), 'settings.json'));
 
-const OVERLAY_WIDTH = 340;
+const OVERLAY_WIDTH = 300;
 let settings: Settings;
 let run: Run | null = null;
 let finished: Run | null = null;
@@ -137,15 +137,19 @@ async function act(a: Action) {
         saveOverlayPosition();
       }
       return;
-    case 'fitHeight':
+    case 'fit':
+      // The window is exactly the size of what's showing, kept on screen as it grows.
       if (overlay && !overlay.isDestroyed()) {
         const b = overlay.getBounds();
-        const height = Math.max(40, Math.min(720, Math.ceil(a.height)));
-        if (b.height !== height) overlay.setBounds({ ...b, height });
+        const width = Math.max(120, Math.min(900, Math.ceil(a.width)));
+        const height = Math.max(40, Math.min(900, Math.ceil(a.height)));
+        const area = screen.getDisplayMatching(b).workArea;
+        const x = Math.max(area.x, Math.min(b.x, area.x + area.width - width));
+        if (b.width !== width || b.height !== height || b.x !== x) overlay.setBounds({ x, y: b.y, width, height });
       }
       return;
-    case 'openDashboard':
-      openDashboard();
+    case 'quit':
+      app.quit();
       return;
     case 'hideOverlay':
       overlay?.hide();

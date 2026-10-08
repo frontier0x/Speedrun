@@ -50,6 +50,23 @@ Click the clock to open the rest (drag it to move it):
 Speedrun doesn't watch your screen, read your apps or send anything anywhere. It's just a timer, and it
 needs no macOS permissions.
 
+## Make it yours
+
+Hover the timer for **–** (hide it; bring it back from the menu bar or with `⌥⇧⌘Space`) and **×** (quit).
+Drag the bottom-right corner to make the whole timer bigger or smaller. Collapsed, it's only as wide as
+the clock.
+
+Under **Settings**:
+
+- **Clock**: hide the milliseconds, or the seconds too (`1:05`).
+- **Size**: S, M, L, XL, or drag the corner.
+- **Colors**: Night, Day, or follow your Mac. Every color the timer uses can be changed separately for
+  day and night: background, text, secondary text, the clock while running, under and over your
+  estimate, paused, best time and the Start button. Each is a solid color or a gradient with as many
+  colors as you like and a direction. Type hex like in Figma (`#A2B`, `#A2B4C6`, `#A2B4C680` with
+  opacity), use the picker, or set opacity in percent. Presets (Night, Neon, Sunset, Mono, Day, Mint)
+  give you a starting point.
+
 ## Dashboard
 
 Open it from the timer (Stats) or the menu bar. It shows every previous run with its splits, estimates vs

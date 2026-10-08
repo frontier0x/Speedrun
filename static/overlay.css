@@ -1,130 +1,178 @@
 /* Speedrun timer. One loud thing, the clock; everything else stays quiet.
-   The clock's color is the information: white while running, green under your estimate,
-   red over it, gold on a new best, grey while paused. */
+   The clock's color is the information: running, under your estimate, over it, paused, best time.
+   Every color is a role (--<role> for a plain color, --<role>-fill for its solid or gradient paint),
+   set from Settings › Colors. Numbers are painted with background-clip so gradients work on text. */
 :root {
-  --clock: #f4f4f0;
-  --dim: #8b8b86;
-  --faint: rgba(255, 255, 255, 0.07);
-  --ahead: #3fd68a;
-  --behind: #ff5a4e;
-  --gold: #ffcf4a;
+  --background: #000000e6; --background-fill: linear-gradient(#000000e6, #000000e6);
+  --text: #d6d6d1; --text-fill: linear-gradient(#d6d6d1, #d6d6d1);
+  --muted: #8b8b86; --muted-fill: linear-gradient(#8b8b86, #8b8b86);
+  --running: #f4f4f0; --running-fill: linear-gradient(#f4f4f0, #f4f4f0);
+  --ahead: #3fd68a; --ahead-fill: linear-gradient(#3fd68a, #3fd68a);
+  --behind: #ff5a4e; --behind-fill: linear-gradient(#ff5a4e, #ff5a4e);
+  --paused: #8b8b86; --paused-fill: linear-gradient(#8b8b86, #8b8b86);
+  --gold: #ffcf4a; --gold-fill: linear-gradient(#ffcf4a, #ffcf4a);
+  --button: #f4f4f0; --button-fill: linear-gradient(#f4f4f0, #f4f4f0);
+  --button-ink: #000;
+  --faint: color-mix(in srgb, var(--text) 9%, transparent);
+  --faint-strong: color-mix(in srgb, var(--text) 16%, transparent);
   --digits: ui-rounded, 'SF Pro Rounded', -apple-system, system-ui, sans-serif;
 }
-html, body { height: auto; background: transparent; overflow: hidden; }
+html, body { height: auto; width: max-content; background: transparent; overflow: hidden; color: var(--text); }
 .panel {
-  background: rgba(0, 0, 0, 0.9); border: 1px solid var(--faint); border-radius: 18px;
+  position: relative; width: max-content; min-width: 150px;
+  background: var(--background-fill); border: 1px solid var(--faint); border-radius: 16px;
   backdrop-filter: blur(30px) saturate(1.4); overflow: hidden;
 }
+/* Open, the panel has room for the list; collapsed it hugs the clock. */
+.panel.open, .panel.finished { width: 300px; }
 .spacer { flex: 1; }
 .row { display: flex; align-items: center; gap: 14px; }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--clock); outline-offset: 2px; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--running); outline-offset: 2px; }
+
+/* Painted numbers: the paint comes from --fill, which the tone classes switch. */
+.paint { --fill: var(--text-fill); background-image: var(--fill); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.panel .paint.ahead { --fill: var(--ahead-fill); }
+.panel .paint.behind { --fill: var(--behind-fill); }
+.panel .paint.paused, .panel .paint.idle, .panel .paint.dim { --fill: var(--paused-fill); }
+.panel .paint.gold { --fill: var(--gold-fill); }
+
+/* ---------- window controls ---------- */
+.winctl { position: absolute; top: 7px; right: 8px; display: flex; gap: 5px; opacity: 0; transition: opacity 0.15s; z-index: 2; }
+.panel:hover .winctl { opacity: 1; }
+.winctl button {
+  width: 18px; height: 18px; padding: 0; border-radius: 50%; border: none; display: grid; place-items: center;
+  font-size: 12px; line-height: 1; background: var(--faint-strong); color: var(--text);
+}
+.winctl button:hover { background: var(--text); color: var(--background); }
+.winctl #quitBtn:hover { background: var(--behind); color: #fff; }
+
+/* Corner handle: drag to make the whole timer bigger or smaller. */
+.grip {
+  position: absolute; right: 2px; bottom: 2px; width: 14px; height: 14px; cursor: nwse-resize; opacity: 0; z-index: 2;
+  background: linear-gradient(135deg, transparent 55%, var(--muted) 55%, var(--muted) 62%, transparent 62%, transparent 72%, var(--muted) 72%, var(--muted) 79%, transparent 79%);
+  transition: opacity 0.15s;
+}
+.panel:hover .grip { opacity: 0.8; }
 
 /* ---------- face ---------- */
-.face { padding: 14px 18px 12px; cursor: default; }
+/* A one-column grid: the clock sets the width, the task and session lines fit inside it. */
+.face { display: grid; padding: 10px 14px 9px; cursor: default; }
+.face .task { width: 0; min-width: 100%; }
 .task {
-  font-size: 13px; font-weight: 500; color: #d6d6d1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-bottom: 2px;
+  font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 1px; padding-right: 44px;
 }
-.task.empty { color: var(--dim); font-weight: 400; }
+.task.empty { color: var(--muted); font-weight: 400; }
 .clock {
   font-family: var(--digits); font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -0.02em;
-  font-size: 46px; line-height: 1; color: var(--clock); white-space: nowrap; transition: color 0.4s;
+  font-size: 44px; line-height: 1.02; white-space: nowrap; --fill: var(--running-fill);
 }
-.clock .ms { font-size: 0.5em; font-weight: 500; letter-spacing: 0; opacity: 0.6; margin-left: 1px; }
-.clock.idle, .clock.paused { color: var(--dim); }
-.session .time.paused { color: var(--dim); }
-.clock.ahead { color: var(--ahead); }
-.clock.behind { color: var(--behind); }
-.clock.gold { color: var(--gold); }
+.clock .ms { font-size: 0.5em; font-weight: 500; letter-spacing: 0; opacity: 0.65; margin-left: 1px; }
 
-/* Session line under the task clock: total time today, and saved or lost against your estimates. */
+/* Session line under the task clock: total time, and saved or lost against your estimates. */
 .session {
-  display: flex; align-items: baseline; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--faint);
-  font-size: 12px; color: var(--dim);
+  display: flex; align-items: baseline; gap: 8px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--faint);
+  font-size: 11px; color: var(--muted); white-space: nowrap;
 }
-.session .time, .session .saved { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; }
-.session .time { color: #d6d6d1; transition: color 0.4s; }
-.session .ahead { color: var(--ahead); }
-.session .behind { color: var(--behind); }
-.session .saved { font-size: 12px; font-weight: 500; }
-.session .saved.paused { color: var(--dim); }
+.session .time, .session .saved { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; }
+.session .saved { font-size: 11px; font-weight: 500; }
 
 /* ---------- summary ---------- */
-.summary { padding: 14px 18px 14px; display: flex; flex-direction: column; gap: 4px; }
-.summary .clock.ahead { color: var(--ahead); }
-.summary .clock.behind { color: var(--behind); }
-.saved-label { font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+.summary { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 4px; }
+.saved-label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
 .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; padding-top: 10px; border-top: 1px solid var(--faint); }
-.facts dt { font-size: 11px; color: var(--dim); }
-.facts dd { margin: 2px 0 0; font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; color: #d6d6d1; }
+.facts dt { font-size: 11px; color: var(--muted); }
+.facts dd { margin: 2px 0 0; font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; color: var(--text); }
 
 /* ---------- more ---------- */
-.more { padding: 0 18px 14px; display: flex; flex-direction: column; gap: 12px; }
-.estimate-row { display: flex; align-items: baseline; gap: 10px; margin-top: -2px; }
-.estimate {
-  padding: 3px 9px; border-radius: 999px; font-size: 12px; color: #d6d6d1; background: var(--faint); border: none;
-}
-.estimate:hover { background: rgba(255, 255, 255, 0.12); }
-.estimate.unset { color: var(--dim); }
-.delta { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dim); }
-.delta.ahead { color: var(--ahead); }
-.delta.behind { color: var(--behind); }
+.more { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 12px; }
+.estimate-row { display: flex; align-items: baseline; gap: 10px; margin-top: 2px; }
+.estimate { padding: 3px 9px; border-radius: 999px; font-size: 12px; color: var(--text); background: var(--faint); border: none; }
+.estimate:hover { background: var(--faint-strong); }
+.estimate.unset { color: var(--muted); }
+.delta { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; --fill: var(--muted-fill); }
 
 .picker { display: flex; flex-wrap: wrap; gap: 6px; }
-.picker button { padding: 4px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--faint); background: transparent; color: #d6d6d1; }
-.picker button:hover, .picker button.on { background: var(--clock); color: #000; border-color: transparent; }
+.picker button { padding: 4px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--faint); background: transparent; color: var(--text); }
+.picker button:hover, .picker button.on { background: var(--running); color: var(--background); border-color: transparent; }
 .picker input { width: 72px; padding: 4px 9px; border-radius: 999px; font-size: 12px; }
-.picker .clear { color: var(--dim); }
+.picker .clear { color: var(--muted); }
 
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.act { padding: 8px 0; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--faint); border: none; color: var(--clock); }
-.act:hover { background: rgba(255, 255, 255, 0.12); }
-.act.primary { background: var(--clock); color: #000; }
-.act.primary:hover { background: #fff; }
+.act { padding: 8px 0; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--faint); border: none; color: var(--text); }
+.act:hover { background: var(--faint-strong); }
+.act.primary { background: var(--button-fill); color: var(--button-ink); }
+.act.primary:hover { filter: brightness(1.08); background: var(--button-fill); }
 .act.small { padding: 5px 12px; font-size: 12px; }
-.act:disabled { opacity: 0.35; cursor: default; }
 
 /* Splits, like a speedrun timer: name, estimate, time, delta. */
 .list { list-style: none; margin: 0 -8px; padding: 0; max-height: 320px; overflow-y: auto; }
 .list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
-.list li:hover { background: var(--faint); }
-.list li.current { background: var(--faint); }
-.list li.section { cursor: default; color: var(--dim); font-size: 11px; padding-top: 10px; }
+.list li:hover, .list li.current { background: var(--faint); }
+.list li.section { cursor: default; color: var(--muted); font-size: 11px; padding-top: 10px; }
 .list li.section:hover { background: none; }
-.list .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #d6d6d1; }
-.list li.current .name { color: var(--clock); font-weight: 500; }
-.list li.done .name { color: var(--dim); }
+.list .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.list li.current .name { color: var(--running); font-weight: 500; }
+.list li.done .name { color: var(--muted); }
 .list .box {
-  width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #5a5a56; flex: none; display: grid; place-items: center;
+  width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; display: grid; place-items: center;
   font-size: 9px; color: transparent;
 }
-.list .box:hover { border-color: var(--clock); }
-.list li.done .box { background: #5a5a56; border-color: #5a5a56; color: #000; }
-.list .num { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--dim); }
-.list .num.ahead { color: var(--ahead); }
-.list .num.behind { color: var(--behind); }
-.list .num.gold { color: var(--gold); }
-.list .est { font-size: 11px; color: var(--dim); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--faint); }
-.list .est:hover { color: var(--clock); border-color: var(--dim); }
-.list .x { opacity: 0; color: var(--dim); background: none; border: none; padding: 0 2px; font-size: 14px; }
+.list .box:hover { border-color: var(--running); }
+.list li.done .box { background: var(--muted); border-color: var(--muted); color: var(--background); }
+.list .num { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 12px; --fill: var(--muted-fill); }
+.list .est { font-size: 11px; color: var(--muted); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--faint); background: none; }
+.list .est:hover { color: var(--text); border-color: var(--muted); }
+.list .x { opacity: 0; color: var(--muted); background: none; border: none; padding: 0 2px; font-size: 14px; }
 .list li:hover .x { opacity: 1; }
-.list li.drop { box-shadow: inset 0 2px 0 var(--clock); }
+.list li.drop { box-shadow: inset 0 2px 0 var(--running); }
 .list .row-picker { padding: 2px 8px 8px 32px; }
 .list .row-picker:hover { background: none; }
-.list .empty { color: var(--dim); cursor: default; }
-.list .empty:hover { background: none; }
 
-.add input { padding: 8px 10px; font-size: 13px; border-radius: 10px; background: var(--faint); border-color: transparent; }
-.add input:focus { border-color: #5a5a56; }
+input, textarea { color: var(--text); background: var(--faint); border-color: transparent; }
+.add input { padding: 8px 10px; font-size: 13px; border-radius: 10px; }
+.add input:focus, textarea:focus { border-color: var(--muted); }
 .paste { display: flex; flex-direction: column; gap: 8px; }
 .paste textarea { font-size: 12px; line-height: 1.5; resize: none; border-radius: 10px; }
-button.text { padding: 0; border: none; background: none; font-size: 12px; color: var(--dim); }
-button.text:hover { color: var(--clock); background: none; }
-.foot { padding-top: 2px; }
+button.text { padding: 0; border: none; background: none; font-size: 12px; color: var(--muted); }
+button.text:hover, button.text.on { color: var(--text); background: none; }
+.foot { padding-top: 2px; flex-wrap: wrap; row-gap: 6px; }
 
-.settings { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--faint); }
-.toggle { display: flex; gap: 10px; align-items: flex-start; font-size: 12px; color: var(--dim); cursor: pointer; }
-.toggle b { display: block; font-weight: 500; color: #d6d6d1; margin-bottom: 1px; }
+/* ---------- settings ---------- */
+.settings { display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 12px; background: var(--faint); max-height: 340px; overflow-y: auto; }
+.settings h3 { margin: 4px 0 -4px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.toggle { display: flex; gap: 10px; align-items: flex-start; font-size: 12px; color: var(--muted); cursor: pointer; }
+.toggle b { display: block; font-weight: 500; color: var(--text); margin-bottom: 1px; }
 .toggle input { width: auto; margin: 2px 0 0; accent-color: var(--ahead); }
+.segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 2px; border-radius: 8px; background: var(--faint); }
+.segmented button { padding: 4px 0; border: none; border-radius: 6px; background: none; font-size: 12px; color: var(--muted); }
+.segmented button.on { background: var(--faint-strong); color: var(--text); }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets button { display: flex; align-items: center; gap: 6px; padding: 3px 9px 3px 4px; border-radius: 999px; border: 1px solid var(--faint); background: none; font-size: 11px; color: var(--text); }
+.presets button:hover { border-color: var(--muted); }
+.presets i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
 
-@media (prefers-reduced-motion: reduce) { .clock { transition: none; } }
+.roles { display: flex; flex-direction: column; gap: 2px; margin: 0 -6px; }
+.role { display: flex; align-items: center; gap: 10px; padding: 5px 6px; border-radius: 8px; border: none; background: none; text-align: left; color: var(--text); font-size: 12px; }
+.role:hover, .role.open { background: var(--faint); }
+.role .chip { width: 18px; height: 18px; border-radius: 5px; flex: none; border: 1px solid var(--faint-strong); }
+.role .name { flex: 1; }
+.role .hex { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: var(--muted); }
+
+/* Paint editor: solid or gradient; every color has a picker, a hex field and opacity, like Figma. */
+.paint-editor { display: flex; flex-direction: column; gap: 8px; padding: 8px 6px 10px; }
+.preview { height: 28px; border-radius: 8px; border: 1px solid var(--faint); }
+.color-field { display: flex; align-items: center; gap: 6px; }
+.color-field input[type='color'] { width: 26px; height: 26px; padding: 0; border: 1px solid var(--faint-strong); border-radius: 6px; background: none; flex: none; }
+.color-field input[type='color']::-webkit-color-swatch-wrapper { padding: 0; }
+.color-field input[type='color']::-webkit-color-swatch { border: none; border-radius: 5px; }
+.color-field .hex-in { flex: 1; min-width: 0; padding: 4px 8px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; border-radius: 6px; }
+.color-field .hex-in.bad { border-color: var(--behind); }
+.color-field .alpha { width: 52px; padding: 4px 6px; font-size: 12px; border-radius: 6px; text-align: right; }
+.color-field .pct { font-size: 11px; color: var(--muted); margin-left: -3px; }
+.color-field .rm { border: none; background: none; color: var(--muted); padding: 0 2px; font-size: 14px; }
+.angle { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+.angle input[type='range'] { flex: 1; padding: 0; background: none; accent-color: var(--running); }
+.editor-foot { display: flex; gap: 14px; }
+
+@media (prefers-reduced-motion: reduce) { .winctl, .grip { transition: none; } }

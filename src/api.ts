@@ -24,7 +24,8 @@ export type Action =
   | { type: 'rename'; id: string; title: string }
   | { type: 'settings'; patch: Partial<Settings> }
   | { type: 'endRun' }
-  | { type: 'fitHeight'; height: number }
+  | { type: 'fit'; width: number; height: number }
+  | { type: 'quit' }
   | { type: 'moveBy'; dx: number; dy: number }
   | { type: 'openDashboard' }
   | { type: 'hideOverlay' }

@@ -1,6 +1,10 @@
 import type { AppState, SpeedrunApi } from '../api.js';
 import {
-  formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, pausedTotal, sessionElapsed, taskKey, timeSaved,
+  displayHex, joinHex, paintColor, paintCss, parseHex, PRESETS, ROLES, splitHex,
+  type Appearance, type Paint, type Role, type Theme,
+} from '../theme.js';
+import {
+  clampScale, DEFAULT_SETTINGS, formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, pausedTotal, sessionElapsed, taskKey, timeSaved,
   type Run, type Task,
 } from '../runs.js';
 
@@ -21,14 +25,19 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return e;
 }
 
-/** 1:02:03 and .456, the clock's two parts. Hours always show, so the width never jumps. */
-function clockParts(ms: number): [string, string] {
+/**
+ * 1:02:03 and .456, the clock's two parts. Hours always show, so the width never jumps. Seconds and
+ * milliseconds follow Settings; without seconds it's 1:02, without milliseconds the small part is empty.
+ */
+function clockParts(ms: number, detail = true): [string, string] {
   const total = Math.max(0, Math.floor(ms));
   const h = Math.floor(total / 3_600_000);
   const m = Math.floor((total % 3_600_000) / 60_000);
   const s = Math.floor((total % 60_000) / 1000);
   const pad = (n: number) => String(n).padStart(2, '0');
-  return [`${h}:${pad(m)}:${pad(s)}`, '.' + String(total % 1000).padStart(3, '0')];
+  const { showSeconds, showMs } = state?.settings ?? DEFAULT_SETTINGS;
+  if (detail && !showSeconds) return [`${h}:${pad(m)}`, ''];
+  return [`${h}:${pad(m)}:${pad(s)}`, detail && showMs ? '.' + String(total % 1000).padStart(3, '0') : ''];
 }
 
 /** The task on the clock: the running one, or the next one up. */
@@ -102,7 +111,7 @@ function renderSummary(run: Run) {
   const [hms, milli] = clockParts(Math.abs(net));
   $('savedHms').textContent = (net < 0 ? '−' : '+') + hms;
   $('savedMs').textContent = milli;
-  $('savedClock').className = 'clock ' + (!saved ? 'idle' : net >= 0 ? 'ahead' : 'behind');
+  $('savedClock').className = 'clock paint ' + (!saved ? 'idle' : net >= 0 ? 'ahead' : 'behind');
   $('savedLabel').textContent = !saved
     ? 'Give tasks an estimate to see how much time you save.'
     : net >= 0
@@ -216,14 +225,14 @@ function row(run: Run, t: Task, current: boolean): HTMLLIElement {
     // Finished: time, delta against the estimate, gold on a new best.
     const best = golds.get(taskKey(t.title));
     const gold = best !== undefined && t.elapsedMs <= best;
-    li.append(el('span', 'num' + (gold ? ' gold' : ''), formatDuration(t.elapsedMs)));
+    li.append(el('span', 'num paint' + (gold ? ' gold' : ''), formatDuration(t.elapsedMs)));
     if (t.estimateMs !== undefined) {
       const d = t.elapsedMs - t.estimateMs;
-      li.append(el('span', 'num ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
+      li.append(el('span', 'num paint ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
     }
   } else {
     const spent = liveElapsed(run, t);
-    if (spent >= 1000 && !current) li.append(el('span', 'num', formatDuration(spent)));
+    if (spent >= 1000 && !current) li.append(el('span', 'num paint', formatDuration(spent)));
     const est = el('button', 'est', t.estimateMs !== undefined ? formatEstimate(t.estimateMs) : 'estimate');
     est.type = 'button';
     est.title = 'How long do you think this takes?';
@@ -279,7 +288,7 @@ function frame() {
     let tone = 'idle';
     if (t && isRunning()) tone = t.estimateMs === undefined ? '' : ms <= t.estimateMs ? 'ahead' : 'behind';
     else if (t && ms > 0) tone = 'paused';
-    clock.className = 'clock ' + tone;
+    clock.className = 'clock paint ' + tone;
 
     // Session: all time on this run's tasks, colored by what you've saved or lost so far.
     const session = $('session');
@@ -290,13 +299,13 @@ function frame() {
       const planned = run.tasks.some((t) => t.estimateMs !== undefined);
       const net = saved?.savedMs ?? 0;
       const tone = !planned ? '' : net >= 0 ? 'ahead' : 'behind';
-      $('sessionTime').className = 'time ' + (isRunning() ? tone : 'paused');
+      $('sessionTime').className = 'time paint ' + (isRunning() ? tone : 'paused');
       const out = $('sessionSaved');
       out.textContent = !planned ? '' : !saved ? 'on plan' : net >= 0 ? `${formatDuration(net)} saved` : `${formatDuration(-net)} behind`;
-      out.className = 'saved ' + tone;
+      out.className = 'saved paint ' + (tone || 'dim');
       if (run.pausedSince !== undefined) {
         out.textContent = `Pause ${formatDuration(pausedTotal(run))}`;
-        out.className = 'saved paused';
+        out.className = 'saved paint paused';
       }
     }
 
@@ -305,18 +314,314 @@ function frame() {
       if (t?.estimateMs !== undefined && ms > 0) {
         const d = t.estimateMs - ms;
         delta.textContent = d >= 0 ? `${formatDuration(d)} left` : `${formatDuration(-d)} over`;
-        delta.className = 'delta ' + (d >= 0 ? 'ahead' : 'behind');
+        delta.className = 'delta paint ' + (d >= 0 ? 'ahead' : 'behind');
       } else delta.textContent = '';
     }
   }
   requestAnimationFrame(frame);
 }
 
+// ---------- size ----------
+
+const SIZES: [string, number][] = [['S', 0.75], ['M', 1], ['L', 1.3], ['XL', 1.6]];
+let liveScale = 1;
+
+function fitWindow() {
+  const r = $('panel').getBoundingClientRect();
+  void api.act({ type: 'fit', width: r.width, height: r.height });
+}
+
+function applyScale(scale: number) {
+  if (scale === liveScale && $('panel').style.zoom) return;
+  liveScale = scale;
+  $('panel').style.zoom = String(scale);
+  fitWindow();
+}
+
+/** Drag the corner: the whole timer scales with you. Saved when you let go. */
+function wireGrip() {
+  const grip = $('grip');
+  grip.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    const startX = e.screenX;
+    const startScale = liveScale;
+    const startWidth = $('panel').getBoundingClientRect().width;
+    const move = (m: PointerEvent) => applyScale(clampScale(startScale * ((startWidth + m.screenX - startX) / startWidth)));
+    const up = () => {
+      grip.removeEventListener('pointermove', move);
+      grip.removeEventListener('pointerup', up);
+      void api.act({ type: 'settings', patch: { scale: Math.round(liveScale * 100) / 100 } });
+    };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', up);
+  });
+}
+
+// ---------- colors ----------
+
+let themeDraft: Theme = DEFAULT_SETTINGS.theme;
+let themeSaving = false;
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let openRole: Role | null = null;
+
+const resolvedAppearance = (t: Theme): 'dark' | 'light' =>
+  t.appearance === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t.appearance;
+
+/** Relative luminance of a hex color, 0 (black) to 1 (white). */
+function luminance(hex: string): number {
+  const h = parseHex(hex) ?? '#000000ff';
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(h.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function applyTheme() {
+  const palette = themeDraft[resolvedAppearance(themeDraft)];
+  const root = document.documentElement.style;
+  for (const [role] of ROLES) {
+    root.setProperty(`--${role}`, paintColor(palette[role]));
+    root.setProperty(`--${role}-fill`, paintCss(palette[role]));
+  }
+  // Text on the Start button: black on light buttons, white on dark ones.
+  root.setProperty('--button-ink', luminance(paintColor(palette.button)) > 0.45 ? '#000' : '#fff');
+}
+
+/** Live while you edit; saved shortly after you stop. */
+function updateTheme(next: Theme) {
+  themeDraft = next;
+  applyTheme();
+  themeSaving = true;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    await api.act({ type: 'settings', patch: { theme: themeDraft } });
+    themeSaving = false;
+  }, 300);
+}
+
+const editedPalette = () => resolvedAppearance(themeDraft);
+
+function setPaint(role: Role, paint: Paint) {
+  const which = editedPalette();
+  updateTheme({ ...themeDraft, [which]: { ...themeDraft[which], [role]: paint } });
+}
+
+function renderSettings() {
+  $<HTMLInputElement>('setCountdown').checked = state.settings.countdown;
+  $<HTMLInputElement>('setPauses').checked = state.settings.pausesCount;
+  $<HTMLInputElement>('setSeconds').checked = state.settings.showSeconds;
+  $<HTMLInputElement>('setMs').checked = state.settings.showMs;
+  $<HTMLInputElement>('setMs').disabled = !state.settings.showSeconds;
+
+  const sizes = $('sizes');
+  sizes.replaceChildren(
+    ...SIZES.map(([label, scale]) => {
+      const b = el('button', Math.abs(liveScale - scale) < 0.04 ? 'on' : '', label);
+      b.type = 'button';
+      b.title = 'Or drag the bottom-right corner';
+      b.onclick = () => void api.act({ type: 'settings', patch: { scale } });
+      return b;
+    }),
+  );
+
+  for (const b of document.querySelectorAll<HTMLElement>('#appearance [data-appearance]')) {
+    b.classList.toggle('on', b.dataset.appearance === themeDraft.appearance);
+  }
+  // Don't rebuild the color editor under your cursor while you type in it.
+  if ($('roles').contains(document.activeElement)) return;
+  renderPresets();
+  renderRoles();
+}
+
+function renderPresets() {
+  const which = editedPalette();
+  $('presets').replaceChildren(
+    ...PRESETS.filter((p) => p.appearance === which).map((p) => {
+      const b = el('button');
+      b.type = 'button';
+      const dot = el('i');
+      dot.style.background = `${paintCss(p.palette.running)}, ${paintCss(p.palette.background)}`;
+      dot.style.backgroundSize = '50% 100%, 100% 100%';
+      dot.style.backgroundRepeat = 'no-repeat';
+      b.append(dot, p.name);
+      b.onclick = () => {
+        updateTheme({ ...themeDraft, [which]: { ...p.palette } });
+        openRole = null;
+        renderRoles();
+      };
+      return b;
+    }),
+  );
+}
+
+const paintLabel = (p: Paint) => (p.kind === 'solid' ? displayHex(p.color) : 'Gradient');
+
+function renderRoles() {
+  const palette = themeDraft[editedPalette()];
+  const box = $('roles');
+  box.replaceChildren();
+  for (const [role, label] of ROLES) {
+    const row = el('button', 'role' + (openRole === role ? ' open' : ''));
+    row.type = 'button';
+    const chip = el('span', 'chip');
+    chip.style.background = paintCss(palette[role]);
+    const hex = el('span', 'hex', paintLabel(palette[role]));
+    row.append(chip, el('span', 'name', label), hex);
+    row.onclick = () => {
+      openRole = openRole === role ? null : role;
+      renderRoles();
+    };
+    box.append(row);
+    if (openRole === role) box.append(paintEditor(role, palette[role], (p) => {
+      chip.style.background = paintCss(p);
+      hex.textContent = paintLabel(p);
+    }));
+  }
+}
+
+/** One color: picker, hex (3, 4, 6 or 8 digits, with or without #) and opacity in percent. */
+function colorField(hex: string, onChange: (hex: string) => void, onRemove?: () => void): HTMLElement {
+  const box = el('div', 'color-field');
+  let { rgb, alpha } = splitHex(hex);
+  const picker = el('input');
+  picker.type = 'color';
+  picker.value = rgb;
+  const text = el('input', 'hex-in');
+  text.value = displayHex(hex);
+  text.spellcheck = false;
+  const a = el('input', 'alpha');
+  a.type = 'number';
+  a.min = '0';
+  a.max = '100';
+  a.value = String(alpha);
+  a.title = 'Opacity';
+  const emit = () => {
+    const out = joinHex(rgb, alpha);
+    text.value = displayHex(out);
+    text.classList.remove('bad');
+    onChange(out);
+  };
+  picker.oninput = () => {
+    rgb = picker.value;
+    emit();
+  };
+  const fromText = () => {
+    const parsed = parseHex(text.value);
+    text.classList.toggle('bad', !parsed);
+    if (!parsed) return;
+    ({ rgb, alpha } = splitHex(parsed));
+    picker.value = rgb;
+    a.value = String(alpha);
+    onChange(parsed);
+  };
+  text.oninput = () => parseHex(text.value) && fromText();
+  text.onchange = fromText;
+  text.onkeydown = (k) => k.key === 'Enter' && fromText();
+  a.oninput = () => {
+    alpha = Math.max(0, Math.min(100, Number(a.value) || 0));
+    emit();
+  };
+  box.append(picker, text, a, el('span', 'pct', '%'));
+  if (onRemove) {
+    const rm = el('button', 'rm', '×');
+    rm.type = 'button';
+    rm.title = 'Remove this color';
+    rm.onclick = onRemove;
+    box.append(rm);
+  }
+  return box;
+}
+
+function paintEditor(role: Role, start: Paint, onPaint: (p: Paint) => void): HTMLElement {
+  const box = el('div', 'paint-editor');
+  let paint: Paint = start;
+  const preview = el('div', 'preview');
+  const commit = (p: Paint, rebuild = false) => {
+    paint = p;
+    preview.style.background = paintCss(p);
+    onPaint(p);
+    setPaint(role, p);
+    if (rebuild) build();
+  };
+
+  const kinds = el('div', 'segmented');
+  const build = () => {
+    kinds.replaceChildren();
+    for (const kind of ['solid', 'gradient'] as const) {
+      const b = el('button', paint.kind === kind ? 'on' : '', kind === 'solid' ? 'Solid' : 'Gradient');
+      b.type = 'button';
+      b.onclick = () => {
+        if (paint.kind === kind) return;
+        const first = paintColor(paint);
+        commit(kind === 'solid' ? { kind, color: first } : { kind, angle: 90, stops: [first, first] }, true);
+      };
+      kinds.append(b);
+    }
+    preview.style.background = paintCss(paint);
+    box.replaceChildren(kinds, preview);
+
+    if (paint.kind === 'solid') {
+      box.append(colorField(paint.color, (c) => commit({ kind: 'solid', color: c })));
+    } else {
+      const g = paint;
+      g.stops.forEach((stop, i) => {
+        box.append(
+          colorField(
+            stop,
+            (c) => commit({ ...g, stops: g.stops.map((x, j) => (j === i ? c : x)) }),
+            g.stops.length > 2 ? () => commit({ ...g, stops: g.stops.filter((_, j) => j !== i) }, true) : undefined,
+          ),
+        );
+      });
+      const angle = el('div', 'angle');
+      const range = el('input');
+      range.type = 'range';
+      range.min = '0';
+      range.max = '360';
+      range.value = String(g.angle);
+      const deg = el('span', '', `${g.angle}°`);
+      range.oninput = () => {
+        deg.textContent = `${range.value}°`;
+        commit({ ...(paint as typeof g), angle: Number(range.value) });
+      };
+      angle.append(el('span', '', 'Direction'), range, deg);
+      box.append(angle);
+    }
+
+    const foot = el('div', 'editor-foot');
+    if (paint.kind === 'gradient') {
+      const add = el('button', 'text', 'Add a color');
+      add.type = 'button';
+      add.onclick = () => {
+        const g = paint as Extract<Paint, { kind: 'gradient' }>;
+        commit({ ...g, stops: [...g.stops, g.stops[g.stops.length - 1]] }, true);
+      };
+      foot.append(add);
+    }
+    const reset = el('button', 'text', 'Reset');
+    reset.type = 'button';
+    reset.title = 'Back to the default color';
+    reset.onclick = () => commit((DEFAULT_SETTINGS.theme as Theme)[editedPalette()][role], true);
+    foot.append(reset);
+    box.append(foot);
+  };
+  build();
+  return box;
+}
+
 // ---------- wiring ----------
 
 function render() {
   golds = new Map(state.golds);
+  if (!themeSaving) themeDraft = state.settings.theme;
+  applyTheme();
+  applyScale(state.settings.scale);
   const fin = state.finished;
+  $('panel').classList.toggle('finished', Boolean(fin));
+  $('panel').classList.toggle('open', isOpen() && !fin);
+  if (!$('settings').hidden) renderSettings();
   $('summary').hidden = !fin;
   $('face').hidden = Boolean(fin);
   if (fin) {
@@ -333,6 +638,7 @@ function render() {
 
 function setOpen(open: boolean) {
   $('more').hidden = !open;
+  $('panel').classList.toggle('open', open);
   if (!open) {
     closePicker();
     pickerFor = null;
@@ -417,9 +723,25 @@ function wire() {
   $('settingsBtn').onclick = () => {
     const box = $('settings');
     box.hidden = !box.hidden;
-    $<HTMLInputElement>('setCountdown').checked = state.settings.countdown;
-    $<HTMLInputElement>('setPauses').checked = state.settings.pausesCount;
+    $('settingsBtn').classList.toggle('on', !box.hidden);
+    openRole = null;
+    if (!box.hidden) renderSettings();
   };
+  $<HTMLInputElement>('setSeconds').onchange = (e) =>
+    void api.act({ type: 'settings', patch: { showSeconds: (e.target as HTMLInputElement).checked } });
+  $<HTMLInputElement>('setMs').onchange = (e) =>
+    void api.act({ type: 'settings', patch: { showMs: (e.target as HTMLInputElement).checked } });
+  for (const b of document.querySelectorAll<HTMLElement>('#appearance [data-appearance]')) {
+    b.onclick = () => {
+      updateTheme({ ...themeDraft, appearance: b.dataset.appearance as Appearance });
+      renderSettings();
+    };
+  }
+  $('minBtn').onclick = () => void api.act({ type: 'hideOverlay' });
+  $('quitBtn').onclick = () => void api.act({ type: 'quit' });
+  for (const id of ['minBtn', 'quitBtn', 'grip']) $(id).addEventListener('mousedown', (e) => e.stopPropagation());
+  wireGrip();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme());
   $<HTMLInputElement>('setCountdown').onchange = (e) =>
     void api.act({ type: 'settings', patch: { countdown: (e.target as HTMLInputElement).checked } });
   $<HTMLInputElement>('setPauses').onchange = (e) =>
@@ -431,7 +753,6 @@ function wire() {
     $('addInput').focus();
   };
   $('endBtn').onclick = () => void api.act({ type: 'endRun' });
-  $('hideBtn').onclick = () => void api.act({ type: 'hideOverlay' });
 
   api.onFocusAdd(() => {
     setOpen(true);
@@ -448,8 +769,8 @@ function wire() {
     } else setOpen(false);
   });
 
-  // The window is always exactly as tall as what's showing.
-  new ResizeObserver(() => void api.act({ type: 'fitHeight', height: $('panel').offsetHeight })).observe($('panel'));
+  // The window is always exactly the size of what's showing.
+  new ResizeObserver(fitWindow).observe($('panel'));
 }
 
 wire();
