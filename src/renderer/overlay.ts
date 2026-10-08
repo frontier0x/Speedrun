@@ -167,6 +167,7 @@ function renderControls() {
 
   const play = $<HTMLButtonElement>('play');
   play.textContent = running ? 'Pause' : 'Start';
+  play.title = (running ? 'Pause' : 'Start') + ' (⌃⌥Space)';
   play.className = 'act' + (running ? '' : ' primary');
   // Nothing to time yet: the add field is the only thing to do.
   $('actions').hidden = !t;

@@ -243,6 +243,7 @@ function buildMenu() {
       { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Shift+Space', click: toggleOverlay },
       { label: 'Dashboard', click: openDashboard },
       { type: 'separator' },
+      { label: 'Start / Pause', accelerator: 'Control+Alt+Space', click: () => void act({ type: 'togglePause' }) },
       { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
       { label: 'End run', click: () => void act({ type: 'endRun' }) },
       { type: 'separator' },
@@ -305,6 +306,10 @@ app.whenReady().then(async () => {
   buildMenu();
   createOverlay();
 
+  // ⌃⌥Space: one key for go and pause, free in macOS and in common apps, easy to hit with one hand.
+  if (!globalShortcut.register('Control+Alt+Space', () => void act({ type: 'togglePause' }))) {
+    console.warn('[speedrun] ⌃⌥Space is taken by another app; Start/Pause has no shortcut.');
+  }
   globalShortcut.register('CommandOrControl+Shift+Return', () => void act({ type: 'split' }));
   globalShortcut.register('CommandOrControl+Shift+Space', toggleOverlay);
   globalShortcut.register('CommandOrControl+Shift+N', () => {

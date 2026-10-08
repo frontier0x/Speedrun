@@ -63,6 +63,7 @@ your streak.
 
 | Shortcut | Action |
 | --- | --- |
+| `⌃⌥Space` | Start or pause (go on a break) |
 | `⌘⇧↩` | Split: finish the current task, start the next |
 | `⌘⇧N` | Add a task |
 | `⌘⇧Space` | Show or hide the timer |
