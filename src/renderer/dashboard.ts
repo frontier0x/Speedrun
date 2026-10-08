@@ -171,7 +171,7 @@ function renderDetail() {
 
   const table = el('table');
   const head = el('tr');
-  for (const h of ['Task', 'Estimate', 'Time', '+/−', 'Best', 'Focus']) head.append(el('th', '', h));
+  for (const h of ['Task', 'Estimate', 'Time', '+/−', 'Best']) head.append(el('th', '', h));
   table.append(head);
   for (const t of run.tasks) table.append(taskRow(run, t));
   box.append(table);
@@ -193,27 +193,8 @@ function taskRow(run: Run, t: Task) {
     timeCell.classList.add('gold');
     timeCell.textContent += ' ★';
   }
-  tr.append(name, el('td', 'muted' + (section ? ' mono-cell' : ''), est !== undefined ? formatEstimate(est) : ''), timeCell, deltaCell(time, (section ? isSectionDone(run, t) : t.done) ? est : undefined), bestCell, focusCell(t));
+  tr.append(name, el('td', 'muted' + (section ? ' mono-cell' : ''), est !== undefined ? formatEstimate(est) : ''), timeCell, deltaCell(time, (section ? isSectionDone(run, t) : t.done) ? est : undefined), bestCell);
   return tr;
-}
-
-/** Work / context / distraction split from focus tracking, with the top apps and sites on hover. */
-function focusCell(t: Task) {
-  const td = el('td');
-  const f = t.focus;
-  const total = f ? f.work + f.context + f.distraction : 0;
-  if (!f || total < 60_000) return td;
-  const bar = el('div', 'focus-split');
-  for (const k of ['work', 'context', 'distraction'] as const) {
-    const s = el('span', k);
-    s.style.width = (f[k] / total) * 100 + '%';
-    bar.append(s);
-  }
-  const pct = (ms: number) => Math.round((ms / total) * 100) + '%';
-  const top = Object.entries(t.sources ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  td.title = `work ${pct(f.work)} · context ${pct(f.context)} · distraction ${pct(f.distraction)}\n` + top.map(([k, ms]) => `${k} ${formatDuration(ms)}`).join('\n');
-  td.append(bar);
-  return td;
 }
 
 async function load(state?: AppState) {
