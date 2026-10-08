@@ -39,7 +39,11 @@ jobs:
         run: |
           tag="v$(node -p "require('./package.json').version")"
           shopt -s nullglob
+          # Plain names, so the newest download is always .../releases/latest/download/Speedrun.dmg
+          v="${tag#v}"
+          mv "release/Speedrun-$v-arm64.dmg" release/Speedrun.dmg
+          mv "release/Speedrun-$v.dmg" release/Speedrun-Intel.dmg
           files=(release/*.dmg release/*.zip release/latest-mac.yml)
           gh release create "$tag" --verify-tag --title "Speedrun ${tag#v}" \
-            --notes "Download **Speedrun-${tag#v}-arm64.dmg** for Apple Silicon Macs (M1 and newer) or **Speedrun-${tag#v}.dmg** for Intel Macs. Open it, drag Speedrun into Applications, then the first time click Done on the warning and use Open Anyway in System Settings › Privacy & Security." \
+            --notes "Download **Speedrun.dmg** for Apple Silicon Macs (M1 and newer) or **Speedrun-Intel.dmg** for Intel Macs. Open it, drag Speedrun into Applications, then the first time click Done on the warning and use Open Anyway in System Settings › Privacy & Security." \
             "${files[@]}"
