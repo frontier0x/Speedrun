@@ -18,22 +18,31 @@ menu bar menu to have it start with your Mac.
 
 ## The timer
 
-Just a timer. No screenshots, no tracking, no AI, no permissions, nothing leaves your Mac.
+A small panel floats above every app, every Space and full-screen windows. It shows two things: the
+task you're on and a big clock, `0:12:34.567`, in hours, minutes, seconds and milliseconds.
 
-- A small card floats above every app, every Space and full-screen windows. It shows only the current
-  task and a big clock with hours, minutes, seconds and milliseconds. It turns red once you're over
-  your estimate. Drag it anywhere.
-- Click it to open the task list. Hover it for ▶/❚❚ and ✓.
-- Add tasks one by one, or paste a whole list from your notes into the field: bullets, checkboxes,
-  `#` headings and indentation become tasks and sections.
-- Put your guess next to a task (`30m`, `~45m`, `(1h)`, `[1h30m]`) or click its estimate to change it.
-- **▶** starts the clock, **✓** (`⌘⇧↩`) finishes the task and starts the next. Click any task to switch
-  to it. **End run** saves the run to Stats and starts a fresh one.
-- Gold splits: beat your best time on a task you've done before and it turns gold ★.
+The clock's color tells you how you're doing: white while it runs, green while you're under your
+estimate, red once you're over, grey while paused.
+
+Click the clock to open the rest (drag it to move it):
+
+- **Estimate**: pick 5m, 10m, 15m, 25m, 45m, 1h, 1h30m or 2h, or type any time. The panel shows how much
+  is left or how far over you are.
+- **Start / Pause** and **Done**. Done (`⌘⇧↩`) finishes the task and starts the next one.
+- **Your list**: click a task to switch to it, drag to reorder, double-click to rename, click its
+  estimate to change it. Finished tasks show their time and how far under or over the estimate they
+  were, in gold if you beat your best time for that task.
+- **Add a task** one at a time (`Write copy 30m` sets a 30-minute estimate, a leading `!` puts it on
+  top), or **Paste a list**: bullets, checkboxes, `#` headings and indentation become tasks and
+  sections, and `30m`, `~30m`, `(1h)` or `[45m]` become estimates.
+- **End run** saves the run, so the next task starts a fresh one.
+
+Speedrun doesn't watch your screen, read your apps or send anything anywhere. It's just a timer, and it
+needs no macOS permissions.
 
 ## Dashboard
 
-Open it from the timer (⌄ › Stats) or the menu bar. It shows every previous run with its splits, estimates vs
+Open it from the timer (Stats) or the menu bar. It shows every previous run with its splits, estimates vs
 actuals, best times and sum of best, plus tracked time over the last 14 days, estimate accuracy and
 your streak.
 

@@ -44,4 +44,3 @@ tr.open td:first-child { color: var(--muted); }
   padding: 6px 9px; font-size: 12px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4); z-index: 10;
 }
 @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
-

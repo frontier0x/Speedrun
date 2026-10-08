@@ -1,67 +1,103 @@
-body { background: transparent; overflow: hidden; }
+/* Speedrun timer. One loud thing, the clock; everything else stays quiet.
+   The clock's color is the information: white while running, green under your estimate,
+   red over it, gold on a new best, grey while paused. */
+:root {
+  --clock: #f4f4f0;
+  --dim: #8b8b86;
+  --faint: rgba(255, 255, 255, 0.07);
+  --ahead: #3fd68a;
+  --behind: #ff5a4e;
+  --gold: #ffcf4a;
+  --digits: ui-rounded, 'SF Pro Rounded', -apple-system, system-ui, sans-serif;
+}
+html, body { height: auto; background: transparent; overflow: hidden; }
 .panel {
-  background: var(--bg); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
-  backdrop-filter: blur(24px);
+  background: rgba(0, 0, 0, 0.9); border: 1px solid var(--faint); border-radius: 18px;
+  backdrop-filter: blur(30px) saturate(1.4); overflow: hidden;
 }
 .spacer { flex: 1; }
+.row { display: flex; align-items: center; gap: 14px; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--clock); outline-offset: 2px; }
 
-/* ---------- face: task + clock ---------- */
-.face { position: relative; padding: 10px 14px 12px; cursor: pointer; }
-.face-top { display: flex; align-items: baseline; gap: 8px; }
-.task { flex: 1; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.task.on { color: var(--text); }
-.est { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.clock { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; margin-top: 2px; white-space: nowrap; }
-.clock .ms { font-size: 20px; color: var(--muted); font-weight: 500; }
-.clock.paused { color: var(--muted); }
-.clock.over { color: var(--behind); }
-.clock.over .ms { color: color-mix(in srgb, var(--behind) 60%, transparent); }
-
-.quick { position: absolute; right: 12px; bottom: 14px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.12s; }
-.face:hover .quick { opacity: 1; }
-.open .quick { display: none; }
-.round {
-  width: 28px; height: 28px; padding: 0; border-radius: 50%; display: grid; place-items: center;
-  font-size: 11px; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line);
+/* ---------- face ---------- */
+.face { padding: 14px 18px 12px; cursor: default; }
+.task {
+  font-size: 13px; font-weight: 500; color: #d6d6d1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 2px;
 }
-
-.progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; }
-.progress > div { height: 100%; width: 0; background: var(--text); opacity: 0.5; transition: width 0.3s linear; }
-.progress.over > div { background: var(--behind); opacity: 1; }
-
-/* ---------- expanded ---------- */
-.more { border-top: 1px solid var(--line); }
-.current { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
-.row { display: flex; align-items: center; gap: 6px; }
-.delta { font-size: 12px; }
-.field { display: flex; flex-direction: column; gap: 4px; }
-.field > span, .field > label { font-size: 11px; color: var(--muted); }
-.field input { padding: 6px 9px; }
-
-.list { list-style: none; margin: 0; padding: 6px; max-height: 280px; overflow-y: auto; }
-.list:empty { display: none; }
-.list li {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer;
-  border: 1px solid transparent;
+.task.empty { color: var(--dim); font-weight: 400; }
+.clock {
+  font-family: var(--digits); font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -0.02em;
+  font-size: 46px; line-height: 1; color: var(--clock); white-space: nowrap; transition: color 0.4s;
 }
-.list li:hover { background: var(--panel); }
-.list li.active { background: rgba(255, 255, 255, 0.07); border-color: var(--line); }
-.list li.section { cursor: default; padding-top: 10px; }
-.list li.section .name { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
-.list li.done .name { color: var(--muted); text-decoration: line-through; }
-.list li.drop-before { box-shadow: 0 -2px 0 var(--text); }
-.list .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.list .spent { font-size: 11px; color: var(--muted); }
-.list .remove { opacity: 0; padding: 0 4px; border: none; background: none; color: var(--muted); }
-.list li:hover .remove { opacity: 1; }
-.check {
-  width: 15px; height: 15px; flex: none; border-radius: 50%; border: 1.5px solid var(--muted);
-  display: grid; place-items: center; font-size: 9px; color: transparent;
-}
-.check:hover { border-color: var(--text); }
-li.done .check { background: var(--text); border-color: var(--text); color: var(--bg-solid); }
+.clock .ms { font-size: 0.5em; font-weight: 500; letter-spacing: 0; opacity: 0.6; margin-left: 1px; }
+.clock.idle, .clock.paused { color: var(--dim); }
+.clock.ahead { color: var(--ahead); }
+.clock.behind { color: var(--behind); }
+.clock.gold { color: var(--gold); }
 
-.add { padding: 10px 14px; border-top: 1px solid var(--line); }
-.foot { display: flex; gap: 4px; padding: 6px 10px 8px; border-top: 1px solid var(--line); }
-.link { background: none; border: none; padding: 3px 6px; color: var(--muted); font-size: 11px; }
-.link:hover { color: var(--text); background: none; }
+/* ---------- more ---------- */
+.more { padding: 0 18px 14px; display: flex; flex-direction: column; gap: 12px; }
+.estimate-row { display: flex; align-items: baseline; gap: 10px; margin-top: -2px; }
+.estimate {
+  padding: 3px 9px; border-radius: 999px; font-size: 12px; color: #d6d6d1; background: var(--faint); border: none;
+}
+.estimate:hover { background: rgba(255, 255, 255, 0.12); }
+.estimate.unset { color: var(--dim); }
+.delta { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dim); }
+.delta.ahead { color: var(--ahead); }
+.delta.behind { color: var(--behind); }
+
+.picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.picker button { padding: 4px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--faint); background: transparent; color: #d6d6d1; }
+.picker button:hover, .picker button.on { background: var(--clock); color: #000; border-color: transparent; }
+.picker input { width: 72px; padding: 4px 9px; border-radius: 999px; font-size: 12px; }
+.picker .clear { color: var(--dim); }
+
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.act { padding: 8px 0; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--faint); border: none; color: var(--clock); }
+.act:hover { background: rgba(255, 255, 255, 0.12); }
+.act.primary { background: var(--clock); color: #000; }
+.act.primary:hover { background: #fff; }
+.act.small { padding: 5px 12px; font-size: 12px; }
+.act:disabled { opacity: 0.35; cursor: default; }
+
+/* Splits, like a speedrun timer: name, estimate, time, delta. */
+.list { list-style: none; margin: 0 -8px; padding: 0; max-height: 320px; overflow-y: auto; }
+.list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.list li:hover { background: var(--faint); }
+.list li.current { background: var(--faint); }
+.list li.section { cursor: default; color: var(--dim); font-size: 11px; padding-top: 10px; }
+.list li.section:hover { background: none; }
+.list .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #d6d6d1; }
+.list li.current .name { color: var(--clock); font-weight: 500; }
+.list li.done .name { color: var(--dim); }
+.list .box {
+  width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #5a5a56; flex: none; display: grid; place-items: center;
+  font-size: 9px; color: transparent;
+}
+.list .box:hover { border-color: var(--clock); }
+.list li.done .box { background: #5a5a56; border-color: #5a5a56; color: #000; }
+.list .num { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--dim); }
+.list .num.ahead { color: var(--ahead); }
+.list .num.behind { color: var(--behind); }
+.list .num.gold { color: var(--gold); }
+.list .est { font-size: 11px; color: var(--dim); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--faint); }
+.list .est:hover { color: var(--clock); border-color: var(--dim); }
+.list .x { opacity: 0; color: var(--dim); background: none; border: none; padding: 0 2px; font-size: 14px; }
+.list li:hover .x { opacity: 1; }
+.list li.drop { box-shadow: inset 0 2px 0 var(--clock); }
+.list .row-picker { padding: 2px 8px 8px 32px; }
+.list .row-picker:hover { background: none; }
+.list .empty { color: var(--dim); cursor: default; }
+.list .empty:hover { background: none; }
+
+.add input { padding: 8px 10px; font-size: 13px; border-radius: 10px; background: var(--faint); border-color: transparent; }
+.add input:focus { border-color: #5a5a56; }
+.paste { display: flex; flex-direction: column; gap: 8px; }
+.paste textarea { font-size: 12px; line-height: 1.5; resize: none; border-radius: 10px; }
+button.text { padding: 0; border: none; background: none; font-size: 12px; color: var(--dim); }
+button.text:hover { color: var(--clock); background: none; }
+.foot { padding-top: 2px; }
+
+@media (prefers-reduced-motion: reduce) { .clock { transition: none; } }
