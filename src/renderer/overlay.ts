@@ -1,6 +1,7 @@
 import type { AppState, SpeedrunApi } from '../api.js';
 import {
-  formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, runElapsed, taskKey, timeSaved, type Run, type Task,
+  formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, pausedTotal, sessionElapsed, taskKey, timeSaved,
+  type Run, type Task,
 } from '../runs.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
@@ -96,7 +97,7 @@ function renderFace() {
 /** End of a session: the big number is the time you saved (green) or lost (red) against your estimates. */
 function renderSummary(run: Run) {
   const saved = timeSaved(run);
-  const total = runElapsed(run);
+  const total = sessionElapsed(run, state.settings.pausesCount);
   const net = saved?.savedMs ?? 0;
   const [hms, milli] = clockParts(Math.abs(net));
   $('savedHms').textContent = (net < 0 ? '−' : '+') + hms;
@@ -109,6 +110,7 @@ function renderSummary(run: Run) {
       : 'over your plan';
   const leaves = run.tasks.filter((t) => !isSection(run, t));
   $('factTotal').textContent = formatDuration(total);
+  $('factPaused').textContent = formatDuration(pausedTotal(run));
   $('factPlanned').textContent = saved ? formatDuration(saved.plannedMs) : '–';
   $('factActual').textContent = saved ? formatDuration(saved.actualMs) : '–';
   $('factTasks').textContent = `${leaves.filter((t) => t.done).length}/${leaves.length}`;
@@ -268,8 +270,10 @@ function frame() {
     const t = currentTask();
     const clock = $('clock');
     const ms = run && t ? liveElapsed(run, t) : 0;
-    const [hms, milli] = clockParts(ms);
-    $('hms').textContent = hms;
+    // Countdown: show what's left of the estimate, then how far over with a minus.
+    const left = state.settings.countdown && t?.estimateMs !== undefined ? t.estimateMs - ms : undefined;
+    const [hms, milli] = clockParts(left === undefined ? ms : Math.abs(left));
+    $('hms').textContent = (left !== undefined && left < 0 ? '−' : '') + hms;
     $('ms').textContent = milli;
 
     let tone = 'idle';
@@ -281,7 +285,7 @@ function frame() {
     const session = $('session');
     session.hidden = !run?.tasks.length;
     if (run && !session.hidden) {
-      $('sessionTime').textContent = clockParts(runElapsed(run))[0];
+      $('sessionTime').textContent = clockParts(sessionElapsed(run, state.settings.pausesCount))[0];
       const saved = timeSaved(run);
       const planned = run.tasks.some((t) => t.estimateMs !== undefined);
       const net = saved?.savedMs ?? 0;
@@ -290,6 +294,10 @@ function frame() {
       const out = $('sessionSaved');
       out.textContent = !planned ? '' : !saved ? 'on plan' : net >= 0 ? `${formatDuration(net)} saved` : `${formatDuration(-net)} behind`;
       out.className = 'saved ' + tone;
+      if (run.pausedSince !== undefined) {
+        out.textContent = `Pause ${formatDuration(pausedTotal(run))}`;
+        out.className = 'saved paused';
+      }
     }
 
     if (isOpen()) {
@@ -329,6 +337,7 @@ function setOpen(open: boolean) {
     closePicker();
     pickerFor = null;
     $('paste').hidden = true;
+    $('settings').hidden = true;
   }
   render();
 }
@@ -405,6 +414,16 @@ function wire() {
   };
 
   $('statsBtn').onclick = () => void api.act({ type: 'openDashboard' });
+  $('settingsBtn').onclick = () => {
+    const box = $('settings');
+    box.hidden = !box.hidden;
+    $<HTMLInputElement>('setCountdown').checked = state.settings.countdown;
+    $<HTMLInputElement>('setPauses').checked = state.settings.pausesCount;
+  };
+  $<HTMLInputElement>('setCountdown').onchange = (e) =>
+    void api.act({ type: 'settings', patch: { countdown: (e.target as HTMLInputElement).checked } });
+  $<HTMLInputElement>('setPauses').onchange = (e) =>
+    void api.act({ type: 'settings', patch: { pausesCount: (e.target as HTMLInputElement).checked } });
   $('summaryStats').onclick = () => void api.act({ type: 'openDashboard' });
   $('newSession').onclick = async () => {
     await api.act({ type: 'dismissSummary' });

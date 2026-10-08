@@ -26,15 +26,23 @@ export interface Run {
   activeTaskId?: string;
   /** Epoch ms when the active task last started ticking; undefined while paused. */
   activeSince?: number;
+  /** Total time spent paused, not counting a pause still going on. */
+  pausedMs?: number;
+  /** Epoch ms when the current pause began; undefined unless you paused. */
+  pausedSince?: number;
 }
 
 export interface Settings {
   accent: string;
   opacity: number;
+  /** Count the task clock down from its estimate instead of up. */
+  countdown: boolean;
+  /** Add pauses to the session time. Off: the session clock stops while you pause. */
+  pausesCount: boolean;
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
-export const DEFAULT_SETTINGS: Settings = { accent: '#e8e8e8', opacity: 0.96 };
+export const DEFAULT_SETTINGS: Settings = { accent: '#e8e8e8', opacity: 0.96, countdown: false, pausesCount: false };
 
 export const ACCENTS = ['#e8e8e8', '#7c5cff', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#e5e7eb'];
 
@@ -186,6 +194,16 @@ export function runElapsed(run: Run, now = Date.now()): number {
   return run.tasks.reduce((sum, t) => sum + liveElapsed(run, t, now), 0);
 }
 
+/** All the time you've paused this session, including a pause still going on. */
+export function pausedTotal(run: Run, now = Date.now()): number {
+  return (run.pausedMs ?? 0) + (run.pausedSince !== undefined ? now - run.pausedSince : 0);
+}
+
+/** The session clock: time on tasks, plus pauses if you count them. */
+export function sessionElapsed(run: Run, pausesCount: boolean, now = Date.now()): number {
+  return runElapsed(run, now) + (pausesCount ? pausedTotal(run, now) : 0);
+}
+
 export function runEstimate(run: Run): number | undefined {
   const roots = run.tasks.filter((t) => !t.parentId);
   const ests = roots.map((t) => totalEstimate(run, t));
@@ -233,14 +251,24 @@ function stopClock(run: Run, now: number) {
   run.activeSince = undefined;
 }
 
+/** Closes a pause that's going on, adding it to the session's pause time. */
+export function endPause(run: Run, now = Date.now()): Run {
+  if (run.pausedSince !== undefined) run.pausedMs = (run.pausedMs ?? 0) + (now - run.pausedSince);
+  run.pausedSince = undefined;
+  return run;
+}
+
 export function startTask(run: Run, id: string, now = Date.now()): Run {
   stopClock(run, now);
+  endPause(run, now);
   run.activeTaskId = id;
   run.activeSince = now;
   return run;
 }
 
+/** Stops the clock. Pausing a running task starts counting pause time. */
 export function pause(run: Run, now = Date.now()): Run {
+  if (run.activeSince !== undefined) run.pausedSince = now;
   stopClock(run, now);
   return run;
 }
@@ -252,6 +280,7 @@ export function resume(run: Run, now = Date.now()): Run {
     run.activeTaskId = next.id;
   }
   if (run.activeSince === undefined) run.activeSince = now;
+  endPause(run, now);
   return run;
 }
 
@@ -343,6 +372,7 @@ export interface RunSummary {
   estimateMs?: number;
   tasksDone: number;
   tasksTotal: number;
+  pausedMs: number;
   /** Share of finished, estimated tasks that came in at or under estimate. */
   onEstimateRate?: number;
   /** Time saved against your estimates; negative means over. See timeSaved. */
@@ -362,6 +392,7 @@ export function summarize(run: Run, now = Date.now()): RunSummary {
     estimateMs: runEstimate(run),
     tasksDone: leaves.filter((t) => t.done).length,
     tasksTotal: leaves.length,
+    pausedMs: pausedTotal(run, now),
     onEstimateRate: estimated.length ? estimated.filter((t) => t.elapsedMs <= t.estimateMs!).length / estimated.length : undefined,
     savedMs: timeSaved(run, now)?.savedMs,
   };

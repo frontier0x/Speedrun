@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   addTasks, completeActive, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
-  timeSaved, totalEstimate,
+  pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -112,4 +112,20 @@ test('counts time saved against estimates', () => {
   assert.deepEqual(timeSaved(run, 0), { savedMs: 5 * MIN, plannedMs: 40 * MIN, actualMs: 35 * MIN });
   d.elapsedMs = 9 * MIN; // 4m over and still going
   assert.equal(timeSaved(run, 0)!.savedMs, 1 * MIN);
+});
+
+test('counts pause time and leaves it out of the session unless asked', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- A\n- B'));
+  startTask(run, run.tasks[0].id, 0);
+  pause(run, 10 * MIN); // 10m work, then a 5m pause
+  assert.equal(pausedTotal(run, 15 * MIN), 5 * MIN);
+  resume(run, 15 * MIN);
+  pause(run, 20 * MIN); // 5m more work, then a pause still going on
+  assert.equal(pausedTotal(run, 22 * MIN), 7 * MIN);
+  assert.equal(sessionElapsed(run, false, 22 * MIN), 15 * MIN);
+  assert.equal(sessionElapsed(run, true, 22 * MIN), 22 * MIN);
+  startTask(run, run.tasks[1].id, 23 * MIN); // switching tasks ends the pause too
+  assert.equal(run.pausedSince, undefined);
+  assert.equal(pausedTotal(run, 30 * MIN), 8 * MIN);
 });
