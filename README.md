@@ -96,7 +96,7 @@ npm start
 Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
 
 - `runs/YYYY-MM-DD/run-*.json`: your task runs
-- `settings.json`: color, opacity and timer position
+- `settings.json`: colors, size, clock detail, countdown and timer position
 
 ## Roadmap
 
