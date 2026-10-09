@@ -306,3 +306,19 @@ input::-webkit-calendar-picker-indicator { display: none !important; }
 .add.indent { padding-left: 18px; }
 
 .list li:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--dim); }
+
+/* Only there while racing your best. */
+.mode-row:has(.race[hidden]) { display: none; }
+
+/* The add field reads like the next row of the list: an empty circle, then the name. */
+.add-row { display: flex; align-items: center; gap: 10px; margin: -2px -8px 0; padding: 5px 8px; border-radius: 8px; }
+.add-row .box { width: 14px; height: 14px; flex: none; border-radius: 50%; border: 1.5px dashed var(--dim); opacity: 0.7; }
+.add-row input { flex: 1; min-width: 0; padding: 0; border: none; border-radius: 0; background: none; font-size: 13px; }
+.add-row input:focus, .add-row input:focus-visible { border: none; outline: none; }
+.add-row:focus-within { background: var(--faint); }
+.add-row:focus-within .box { opacity: 1; }
+.add-row input::placeholder { color: var(--dim); }
+.add-row.indent { padding-left: 26px; }
+
+/* Countdown, at the very bottom. */
+.row.bottom { margin-top: -4px; }

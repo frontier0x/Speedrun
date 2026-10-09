@@ -26,7 +26,7 @@ function setIndent(on: boolean) {
   const last = state.run?.tasks.filter((t) => !t.parentId).at(-1);
   addIndent = on && Boolean(last);
   $('addForm').classList.toggle('indent', addIndent);
-  $<HTMLInputElement>('addInput').placeholder = addIndent && last ? `Subtask of ${last.title}, e.g. Hero 20m` : 'Add a task, e.g. Write copy 30m';
+  $<HTMLInputElement>('addInput').placeholder = addIndent && last ? `Subtask of ${last.title}, e.g. Hero 20m` : 'New task, e.g. Emails 15m';
 }
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);

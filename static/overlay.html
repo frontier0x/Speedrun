@@ -98,10 +98,6 @@
       </div>
       <div class="mode-row">
         <button class="race" id="race" type="button" hidden></button>
-        <span class="spacer"></span>
-        <button class="switch" id="countdownBtn" type="button" role="switch" title="Count down from the estimate instead of up">
-          <span class="track"><span class="knob"></span></span>Countdown
-        </button>
       </div>
 
       <button class="not-same" id="notSame" type="button" hidden>Not the same task</button>
@@ -111,8 +107,10 @@
       <!-- An empty session: start one of your templates in one click. -->
       <div class="chips" id="tplChips" hidden></div>
 
-      <form class="add" id="addForm">
-        <input id="addInput" list="taskNames" placeholder="Add a task, e.g. Write copy 30m" autocomplete="off" />
+      <!-- A new task, written right where it will sit: a circle and the name. -->
+      <form class="add add-row" id="addForm">
+        <span class="box" aria-hidden="true"></span>
+        <input id="addInput" list="taskNames" placeholder="New task, e.g. Emails 15m" autocomplete="off" />
       </form>
       <datalist id="taskNames"></datalist>
 
@@ -135,6 +133,11 @@
         <span class="spacer"></span>
         <button class="text" id="endBtn" type="button" title="Stop the clock and see what you saved">End session</button>
       </footer>
+      <div class="row bottom">
+        <button class="switch" id="countdownBtn" type="button" role="switch" title="Count down from the estimate instead of up">
+          <span class="track"><span class="knob"></span></span>Countdown
+        </button>
+      </div>
     </section>
     <div class="grip" id="grip" title="Drag to resize"></div>
   </main>
