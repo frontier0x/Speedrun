@@ -54,7 +54,7 @@ on below it in larger type, then the session.
   shows what's left of its estimate (or how far over) right next to it. Finished tasks show their time and how far under or over the estimate they
   were, in gold if you beat your best time for that task. Estimates: pick 5m to 2h or type any time.
 - **Moving and nesting**: drag a task, or select it and press `⌥↑` / `⌥↓`; its subtasks always move
-  with it. `Tab` makes a task a subtask of the one above, `Shift+Tab` a task again. In the add field,
+  with it. `Tab` makes a task a subtask of the one above, `Shift+Tab` a task again. There are two levels, tasks and subtasks. In the add field,
   `Tab` makes the next task a subtask of your last task and `Shift+Tab` switches back.
 - **Subtasks**: hover a task and click **+**, or use `Tab`. A task with subtasks shows their total time, how many are
   done and the sum of their estimates (or its own estimate, if you give it one). While you work on a

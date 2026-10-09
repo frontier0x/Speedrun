@@ -265,16 +265,17 @@ test('Tab and Shift+Tab move tasks in and out of subtasks, carrying their own su
   const [page, , copy, headline, emails] = run.tasks;
   const titles = () => run.tasks.map((t) => (t.parentId ? (run.tasks.find((p) => p.id === t.parentId)!.title + ' > ') : '') + t.title);
 
-  indentTask(run, copy.id); // Copy (with Headline) goes under Page
-  assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Page > Copy', 'Copy > Headline', 'Emails']);
-  outdentTask(run, copy.id); // back out, right after Page's other subtasks
-  assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Copy', 'Copy > Headline', 'Emails']);
-  indentTask(run, emails.id);
-  outdentTask(run, headline.id); // Headline out of Copy: after Copy's block, before nothing else
+  indentTask(run, emails.id); // Emails goes under Copy
+  assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Copy', 'Copy > Headline', 'Copy > Emails']);
+  indentTask(run, headline.id); // already a subtask: two levels only, nothing happens
+  assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Copy', 'Copy > Headline', 'Copy > Emails']);
+  outdentTask(run, headline.id); // back to a task, right after Copy's other subtasks
   assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Copy', 'Copy > Emails', 'Headline']);
   shiftTask(run, copy.id, -1); // Copy and its subtask swap with Page and its subtask
   assert.deepEqual(titles(), ['Copy', 'Copy > Emails', 'Page', 'Page > Hero', 'Headline']);
   shiftTask(run, copy.id, 1);
   assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Copy', 'Copy > Emails', 'Headline']);
+  indentTask(run, copy.id); // Copy under Page: its subtask Emails becomes Page's too, after Copy
+  assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Page > Copy', 'Page > Emails', 'Headline']);
   assert.equal(page.parentId, undefined);
 });

@@ -477,7 +477,7 @@ function row(run: Run, t: Task, current: boolean, depth: number): HTMLLIElement 
       const d = t.elapsedMs - t.estimateMs;
       li.append(el('span', 'num ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
     }
-    li.append(subtaskButton(t));
+    if (!t.parentId) li.append(subtaskButton(t)); // two levels: subtasks don't get their own
     li.title = 'Click to pick this task back up';
     li.onclick = () => void api.act({ type: 'reopen', id: t.id });
   } else {
@@ -487,7 +487,8 @@ function row(run: Run, t: Task, current: boolean, depth: number): HTMLLIElement 
       left.dataset.left = t.id;
       li.append(left);
     }
-    li.append(estimateButton(t), subtaskButton(t));
+    li.append(estimateButton(t));
+    if (!t.parentId) li.append(subtaskButton(t)); // two levels: subtasks don't get their own
     // Click a task to work on it; click the current one while paused to carry on.
     const runningThis = current && isRunning();
     li.title = runningThis ? '' : current ? 'Click to carry on' : 'Click to switch to this task';

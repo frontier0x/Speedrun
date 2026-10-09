@@ -519,14 +519,17 @@ function siblingBefore(run: Run, t: Task): Task | undefined {
 }
 
 /**
- * Tab: the task becomes a subtask of the task above it (same level), after that task's other
- * subtasks. Its own subtasks come along. If the clock was on the new parent, it moves to this task.
+ * Tab: a task becomes a subtask of the task above it. There are only two levels, so its own subtasks
+ * become subtasks of that task too, right after it. If the clock was on the new parent, it moves here.
  */
 export function indentTask(run: Run, id: string, now = Date.now()): Run {
   const t = run.tasks.find((x) => x.id === id);
-  const parent = t && siblingBefore(run, t);
+  // Two levels only, tasks and subtasks: a subtask can't go deeper.
+  const parent = t && !t.parentId ? siblingBefore(run, t) : undefined;
   if (!t || !parent) return run;
   t.parentId = parent.id;
+  // Its own subtasks become subtasks of the same task, right after it.
+  for (const c of run.tasks) if (c.parentId === t.id) c.parentId = parent.id;
   if (parent.done) {
     parent.done = false;
     parent.doneAt = undefined;
