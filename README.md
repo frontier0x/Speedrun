@@ -18,8 +18,9 @@ your Mac by default, so the icon is always there; untick **Open at login** in it
 
 ## The timer
 
-A small panel floats above every app, every Space and full-screen windows. It shows two things: the
-task you're on and a big clock, `0:12:34.567`, in hours, minutes, seconds and milliseconds.
+A small panel floats above every app, every Space and full-screen windows. On top is a big clock,
+`0:12:34.567`, in hours, minutes, seconds and milliseconds; under it the task you're on, then the session.
+Hover the task line for **–** (hide) and **×** (quit).
 
 The clock's color tells you how you're doing: white while it runs, green while you're under your
 estimate, red once you're over, grey while paused.
@@ -45,7 +46,7 @@ bigger or smaller.
 the clock shows milliseconds and seconds, and every color. Each color can be solid or a gradient; type any
 hex like `#3fd68a` or `#00000080` (the last two digits are opacity), or start from a preset.
 
-Click the clock to open the rest (drag it to move it). Open, the clock sits on top with the task under it, larger:
+Click the clock to open the rest (drag it to move it). Open, the task under the clock gets larger:
 
 - **Shortcuts**: `⌘⇧Space` is go/pause and `⌘⇧↩` is done, from any app.
 - **Your list** stays in your order: new tasks go at the end and finished ones stay where they are. Select
