@@ -30,8 +30,8 @@ finish the last task or click End session, the panel shows the total time you sa
 your estimates. **Continue with next task** keeps the same session going so you can add another task;
 Start a new session starts a fresh list.
 
-The round button next to the clock starts (green) and pauses (red) the task, and stays there when the
-timer is folded. The circle next to the task name finishes it and shows the next one.
+When the panel is open, the round button next to the clock starts (green) and pauses (red) the task.
+Folded, the timer is just the task and the clock; `⌘⇧Space` starts and pauses from anywhere. The circle next to the task name finishes it and shows the next one.
 
 Pausing stops both clocks and counts the pause; the summary shows how long you paused. The **Countdown**
 switch in the open panel makes the task clock count down from your estimate, then into the red with a
