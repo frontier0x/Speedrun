@@ -53,6 +53,8 @@ export interface Settings {
   scale: number;
   /** The first-start tips have been seen. */
   onboarded: boolean;
+  /** Open at login was switched on once for you on first launch; after that it's your choice. */
+  loginItemDefaulted: boolean;
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
@@ -67,6 +69,7 @@ export const DEFAULT_SETTINGS: Settings = {
   precision: 'ms',
   scale: 1,
   onboarded: false,
+  loginItemDefaulted: false,
 };
 
 export const MIN_SCALE = 0.6;

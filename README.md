@@ -13,8 +13,9 @@ You race your own estimates and your best times.
    **Done**, then go to System Settings › Privacy & Security, scroll down and click **Open Anyway**.
    Or run `xattr -dr com.apple.quarantine /Applications/Speedrun.app` once. After that it opens normally.
 
-Speedrun shows a stopwatch icon in the menu bar and the floating timer bar (no Dock icon). Tick **Open at login** in the
-menu bar menu to have it start with your Mac.
+Speedrun shows a stopwatch icon in the menu bar and the floating timer bar (no Dock icon). Once installed it
+opens at login, so it's always in your menu bar; macOS shows a short notice the first time. Don't want that?
+Untick **Open at login** in the menu bar menu or in Settings › Timer, and it stays off.
 
 ## The timer
 

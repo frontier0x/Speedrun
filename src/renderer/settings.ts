@@ -66,6 +66,9 @@ function renderBasics() {
     $('weightVal').textContent = weight.value;
   };
 
+  const login = $<HTMLInputElement>('openAtLogin');
+  login.checked = state.openAtLogin;
+  login.onchange = () => void api.act({ type: 'setOpenAtLogin', on: login.checked });
   const countdown = $<HTMLInputElement>('countdown');
   countdown.checked = s.countdown;
   countdown.onchange = () => patch({ countdown: countdown.checked });

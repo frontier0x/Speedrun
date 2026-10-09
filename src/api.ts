@@ -10,6 +10,8 @@ export interface AppState {
   golds: [string, number][];
   /** Time on tasks and in pauses, today and this week. */
   totals: Totals;
+  /** Speedrun opens when you log in, so it's always in the menu bar. */
+  openAtLogin: boolean;
 }
 
 export type Action =
@@ -37,6 +39,7 @@ export type Action =
   | { type: 'openDashboard' }
   | { type: 'hideOverlay' }
   | { type: 'dismissSummary' }
+  | { type: 'setOpenAtLogin'; on: boolean }
   | { type: 'renameRun'; id: string; name: string }
   | { type: 'openSettings' }
   | { type: 'quit' };

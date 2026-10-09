@@ -41,6 +41,7 @@ function state(): AppState {
     settings,
     golds: [...goldSplits(pastRuns.filter((r) => r !== run))],
     totals: periodTotals(sessions.map((r) => summarize(r))),
+    openAtLogin: app.getLoginItemSettings().openAtLogin,
   };
 }
 
@@ -171,6 +172,10 @@ async function act(a: Action) {
       await runStore.save(target);
       break;
     }
+    case 'setOpenAtLogin':
+      app.setLoginItemSettings({ openAtLogin: a.on });
+      buildMenu();
+      break;
     case 'dismissSummary':
       finished = null;
       break;
@@ -359,7 +364,7 @@ function buildMenu() {
         label: 'Open at login',
         type: 'checkbox',
         checked: app.getLoginItemSettings().openAtLogin,
-        click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
+        click: (item) => void act({ type: 'setOpenAtLogin', on: item.checked }),
       },
       { label: 'Quit Speedrun', role: 'quit' },
     ]),
@@ -382,6 +387,13 @@ app.whenReady().then(async () => {
   settings.scale = clampScale(settings.scale);
   nativeTheme.themeSource = settings.theme;
   pastRuns = await runStore.list();
+  // Installed, Speedrun opens at login by default so it's always in the menu bar. Only once: if you
+  // switch it off later (menu bar or Settings), it stays off. Never for a dev build run from source.
+  if (app.isPackaged && !settings.loginItemDefaulted) {
+    app.setLoginItemSettings({ openAtLogin: true });
+    settings = { ...settings, loginItemDefaulted: true };
+    persistSettings();
+  }
   const today = new Date().toLocaleDateString('sv-SE');
   const latest = pastRuns[0];
   if (latest && !latest.endedAt && new Date(latest.startedAt).toLocaleDateString('sv-SE') === today) run = latest;
