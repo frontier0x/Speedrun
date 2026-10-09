@@ -4,6 +4,7 @@ import {
   COLOR_LABELS, DEFAULT_COLORS, PRESETS, normalizeHex, paintSolid, paintToCss, resolveMode,
   type ColorKey, type GradientStop, type Mode, type Paint,
 } from '../theme.js';
+import { play } from './sounds.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -72,6 +73,23 @@ function renderBasics() {
   const pauses = $<HTMLInputElement>('pausesCount');
   pauses.checked = s.pausesCount;
   pauses.onchange = () => patch({ pausesCount: pauses.checked });
+  for (const key of ['race', 'startCountdown', 'sounds'] as const) {
+    const box = $<HTMLInputElement>(key);
+    box.checked = s[key];
+    box.onchange = () => {
+      patch({ [key]: box.checked });
+      renderBasics();
+    };
+  }
+  const volume = $<HTMLInputElement>('volume');
+  volume.value = String(Math.round(s.soundVolume * 100));
+  $('volumeVal').textContent = volume.value + '%';
+  $('volumeField').hidden = !s.sounds;
+  volume.oninput = () => ($('volumeVal').textContent = volume.value + '%');
+  volume.onchange = () => {
+    patch({ soundVolume: Number(volume.value) / 100 });
+    play('split', Number(volume.value) / 100);
+  };
 }
 
 // ---------- colors ----------

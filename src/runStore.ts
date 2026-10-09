@@ -1,9 +1,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import type { Template } from './race.js';
 import { DEFAULT_SETTINGS, type Run, type Settings } from './runs.js';
 
-/** Runs live in runs/YYYY-MM-DD/run-<id>.json. Settings in settings.json. */
+/** Runs live in runs/YYYY-MM-DD/run-<id>.json. Settings in settings.json, templates in templates.json. */
 export class RunStore {
   constructor(
     private readonly runsRoot: string,
@@ -67,5 +68,22 @@ export class RunStore {
 
   async saveSettings(settings: Settings): Promise<void> {
     await writeFile(this.settingsPath, JSON.stringify(settings, null, 2));
+  }
+
+  private get templatesPath() {
+    return join(dirname(this.settingsPath), 'templates.json');
+  }
+
+  async loadTemplates(): Promise<Template[]> {
+    try {
+      const saved = JSON.parse(await readFile(this.templatesPath, 'utf8'));
+      return Array.isArray(saved) ? saved : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async saveTemplates(templates: Template[]): Promise<void> {
+    await writeFile(this.templatesPath, JSON.stringify(templates, null, 2));
   }
 }

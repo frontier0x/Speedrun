@@ -62,6 +62,16 @@
         <span><b>Countdown</b>The task clock counts down from your estimate, then into the red.</span></label>
       <label class="toggle"><input type="checkbox" id="pausesCount" />
         <span><b>Count pauses in the session</b>Off: the session clock stops while you pause.</span></label>
+      <label class="toggle"><input type="checkbox" id="race" />
+        <span><b>Race your best</b>Shows your best time for each task under the clock, and for templates how you're doing against your fastest run.</span></label>
+      <label class="toggle"><input type="checkbox" id="startCountdown" />
+        <span><b>3 · 2 · 1 · Go</b>A short countdown before a session's clock starts. Esc skips it.</span></label>
+      <label class="toggle"><input type="checkbox" id="sounds" />
+        <span><b>Sounds</b>Countdown, finishing a task, a new best, the end of a run.</span></label>
+      <div class="field" id="volumeField">
+        <label for="volume">Volume <span class="val" id="volumeVal"></span></label>
+        <input type="range" id="volume" min="5" max="100" step="5" />
+      </div>
     </section>
 
     <section data-tab="keys">

@@ -25,6 +25,15 @@
           <svg class="play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5z"/></svg>
           <svg class="pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg>
         </button>
+        <!-- 3 · 2 · 1 · Go, over the clock, before a session's first second. -->
+        <div class="countdown" id="countdownView" hidden></div>
+      </div>
+      <!-- Racing your best: your best time for this task, and how you're doing against it. -->
+      <div class="session best" id="best" hidden title="Click if this isn't the same task">
+        <span class="label">Best</span>
+        <span class="time" id="bestTime"></span>
+        <span class="spacer"></span>
+        <span class="saved" id="bestDelta"></span>
       </div>
       <!-- When the task is a subtask: how its whole group is doing. -->
       <div class="session group" id="group" hidden>
@@ -39,12 +48,16 @@
         <span class="spacer"></span>
         <span class="saved" id="sessionSaved"></span>
       </div>
+      <!-- A moment after you finish a task: how it went. Sits over the lines above, so nothing jumps. -->
+      <div class="flash" id="flash" hidden></div>
     </section>
 
     <!-- Shown when a session ends: what you saved against your plan. -->
     <section class="summary" id="summary" hidden>
-      <div class="task">Session done</div>
+      <div class="task" id="summaryTitle">Session done</div>
       <div class="clock" id="savedClock"><span id="savedHms">0:00:00</span><span class="ms" id="savedMs">.000</span></div>
+      <!-- A template run, racing your best: new best or how far off, and where it ranks. -->
+      <div class="race-line" id="raceLine" hidden></div>
       <div class="saved-label" id="savedLabel"></div>
       <dl class="facts">
         <div><dt>Session</dt><dd id="factTotal"></dd></div>
@@ -62,8 +75,12 @@
       <form class="add" id="continueForm">
         <input id="continueInput" placeholder="Add a task and keep going, e.g. Emails 15m" autocomplete="off" />
       </form>
+      <form class="add" id="saveTplForm" hidden>
+        <input id="saveTplName" placeholder="Name the template, e.g. Morning routine" autocomplete="off" />
+      </form>
       <div class="row">
         <button class="text" id="summaryStats" type="button">Stats</button>
+        <button class="text" id="saveTplBtn" type="button" title="Save these tasks to run again, and race your best">Save as template</button>
         <span class="spacer"></span>
         <button class="text" id="newSession" type="button">Start a new session</button>
       </div>
@@ -92,6 +109,9 @@
 
       <ol class="list" id="list"></ol>
 
+      <!-- With nothing on the list: your templates, one click to load. -->
+      <div class="chips" id="tplChips" hidden></div>
+
       <form class="add" id="addForm">
         <input id="addInput" placeholder="Add a task, e.g. Write copy 30m" autocomplete="off" />
       </form>
@@ -112,6 +132,7 @@
         <button class="text" id="statsBtn" type="button">Stats</button>
         <button class="text" id="settingsBtn" type="button">Settings</button>
         <span class="spacer"></span>
+        <button class="text" id="resetBtn" type="button" title="Start this template over; this attempt won't count against your times" hidden>Reset</button>
         <button class="text" id="endBtn" type="button" title="Stop the clock and see what you saved">End session</button>
       </footer>
     </section>

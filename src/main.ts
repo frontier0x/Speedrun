@@ -2,7 +2,11 @@ import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage,
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Action, AppState } from './api.js';
+import type { Action, AppState, Flash, RaceInfo } from './api.js';
+import {
+  bestFor, pairKey, rankOf, retext, runFromTemplate, saveAsTemplate, templateFromText, templateRecord, templateText,
+  type Template,
+} from './race.js';
 import {
   addSubtask, addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
   parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, setElapsed, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
@@ -21,6 +25,7 @@ let settings: Settings;
 let run: Run | null = null;
 let finished: Run | null = null;
 let pastRuns: Run[] = [];
+let templates: Template[] = [];
 
 let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
@@ -33,7 +38,92 @@ const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, finished, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))], totals: totals() };
+  return {
+    run,
+    finished,
+    settings,
+    golds: [...goldSplits(pastRuns.filter((r) => r !== run && !r.resetAt))],
+    totals: totals(),
+    templates: templates.map((t) => {
+      const rec = templateRecord(t.id, sessions());
+      return {
+        id: t.id,
+        name: t.name,
+        text: templateText(t),
+        tasks: t.tasks.length,
+        attempts: rec.attempts,
+        resets: rec.resets,
+        bestMs: rec.best ? runElapsed(rec.best) : undefined,
+      };
+    }),
+    race: settings.race ? raceInfo() : null,
+  };
+}
+
+/** Every session we know of, live ones included, each once. */
+function sessions(): Run[] {
+  return [run, finished, ...pastRuns].filter((r, i, a): r is Run => !!r && a.findIndex((x) => x?.id === r.id) === i);
+}
+
+/** Your bests to race: per task, and for a template, your fastest run and where this one lands. */
+function raceInfo(): RaceInfo {
+  const all = sessions();
+  const bests: RaceInfo['bests'] = {};
+  if (run)
+    for (const t of run.tasks) {
+      const b = bestFor(t, run, all, settings.notSame);
+      if (b) bests[t.id] = b;
+    }
+  const bestRun = run?.templateId ? templateRecord(run.templateId, all.filter((r) => r !== run)).best ?? null : null;
+  let finish: RaceInfo['finish'] = null;
+  if (finished?.templateId) {
+    const rec = templateRecord(finished.templateId, all);
+    const before = templateRecord(finished.templateId, all.filter((r) => r !== finished)).best;
+    finish = {
+      complete: rec.runs.includes(finished),
+      totalMs: runElapsed(finished),
+      previousBestMs: before ? runElapsed(before) : undefined,
+      rank: rankOf(finished, rec),
+      runs: rec.runs.length,
+      attempts: rec.attempts,
+    };
+  }
+  return { bests, bestRun, finish };
+}
+
+function saveTemplates() {
+  void runStore.saveTemplates(templates).catch((err) => console.error('[speedrun] saving templates failed', err));
+}
+
+// ---------- the moments: start countdown and finishing a task ----------
+
+let countdown: { go: () => void } | null = null;
+
+/** 3 · 2 · 1 · Go before a session's first second, if it's on. Resolves at Go, or right away if skipped. */
+function countdownFirst(): Promise<void> {
+  const fresh = run && run.activeSince === undefined && runElapsed(run) === 0 && run.tasks.length > 0;
+  if (!settings.startCountdown || !fresh || !overlay?.isVisible()) return Promise.resolve();
+  const ms = 2400;
+  overlay.webContents.send('countdown', ms);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => go(false), ms);
+    const go = (skipped = true) => {
+      clearTimeout(timer);
+      if (skipped) overlay?.webContents.send('countdown', 0);
+      countdown = null;
+      resolve();
+    };
+    countdown = { go };
+  });
+}
+
+/** What a finished task did, for the overlay's flash: against its estimate and, racing, your best. */
+function flashFor(id: string | undefined, now: number): Flash | null {
+  const t = run?.tasks.find((x) => x.id === id);
+  if (!run || !t || t.done) return null;
+  const elapsedMs = liveElapsed(run, t, now);
+  const best = settings.race ? bestFor(t, run, sessions(), settings.notSame) : undefined;
+  return { elapsedMs, estimateMs: t.estimateMs, bestMs: best?.ms, newBest: best !== undefined && elapsedMs < best.ms };
 }
 
 /** Time on tasks and in pauses today and over the last 7 days, by the day each session started. */
@@ -157,11 +247,18 @@ async function act(a: Action) {
       break;
     }
     case 'start':
-      if (run) startTask(run, a.id, now);
+      if (countdown) return countdown.go();
+      if (!run) break;
+      await countdownFirst();
+      startTask(run, a.id, Date.now());
       break;
-    case 'toggleDone':
-      if (run) toggleDone(run, a.id, now);
+    case 'toggleDone': {
+      if (!run) break;
+      const flash = flashFor(a.id, now);
+      toggleDone(run, a.id, now);
+      if (flash && run.tasks.find((t) => t.id === a.id)?.done) overlay?.webContents.send('flash', flash);
       break;
+    }
     case 'reopen':
       if (run) reopenTask(run, a.id, now);
       break;
@@ -170,12 +267,25 @@ async function act(a: Action) {
       if (run && ms !== undefined) setElapsed(run, a.id, ms, now);
       break;
     }
-    case 'split':
-      if (run) completeActive(run, now);
+    case 'split': {
+      if (!run) break;
+      const flash = flashFor(run.activeTaskId, now);
+      completeActive(run, now);
+      if (flash) overlay?.webContents.send('flash', flash);
       break;
+    }
     case 'togglePause':
-      if (run) run.activeSince !== undefined ? pause(run, now) : resume(run, now);
+      if (countdown) return countdown.go();
+      if (!run) break;
+      if (run.activeSince !== undefined) pause(run, now);
+      else {
+        await countdownFirst();
+        resume(run, Date.now());
+      }
       break;
+    case 'skipCountdown':
+      countdown?.go();
+      return;
     case 'remove':
       if (run) removeTask(run, a.id, now);
       break;
@@ -204,6 +314,84 @@ async function act(a: Action) {
       break;
     case 'dismissSummary':
       finished = null;
+      break;
+    case 'startTemplate': {
+      const tpl = templates.find((t) => t.id === a.id);
+      if (!tpl) break;
+      if (run?.tasks.length) await endRun(now);
+      finished = null;
+      run = runFromTemplate(tpl);
+      pastRuns = [run, ...pastRuns];
+      break;
+    }
+    case 'saveTemplate': {
+      // The session becomes the template's first attempt, so a finished one is the run to beat.
+      const target = sessions().find((r) => r.id === a.runId);
+      if (!target || !target.tasks.length) break;
+      const tpl = saveAsTemplate(target, a.name || target.name);
+      templates = [...templates, tpl];
+      saveTemplates();
+      await runStore.save(target);
+      break;
+    }
+    case 'createTemplate': {
+      const tpl = templateFromText(a.name, a.text);
+      if (!tpl.tasks.length) break;
+      templates = [...templates, tpl];
+      saveTemplates();
+      break;
+    }
+    case 'updateTemplate':
+      templates = templates.map((t) => {
+        if (t.id !== a.id) return t;
+        const next = a.text !== undefined ? retext(t, a.text) : t;
+        return a.name?.trim() ? { ...next, name: a.name.trim() } : next;
+      });
+      saveTemplates();
+      break;
+    case 'deleteTemplate': {
+      const tpl = templates.find((t) => t.id === a.id);
+      if (!tpl) break;
+      const { response } = await dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Delete', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+        message: `Delete the template "${tpl.name}"?`,
+        detail: 'Sessions you ran from it stay in Stats.',
+      });
+      if (response !== 0) return;
+      templates = templates.filter((t) => t.id !== a.id);
+      saveTemplates();
+      break;
+    }
+    case 'resetRun': {
+      // Speedrun-style reset: this attempt is archived (it counts as an attempt, not a run) and the
+      // template starts over, every task open at 0:00. Its time still counts as time on tasks.
+      if (!run?.templateId) break;
+      const tpl = templates.find((t) => t.id === run!.templateId);
+      const { response } = await dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Reset', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+        message: 'Reset this run?',
+        detail: "This attempt is kept as a reset, so it won't count against your times. The tasks start over at 0:00.",
+      });
+      if (response !== 0) return;
+      const at = Date.now();
+      pause(run, at);
+      run.pausedSince = undefined;
+      run.resetAt = run.endedAt = new Date(at).toISOString();
+      await runStore.save(run);
+      run = tpl ? runFromTemplate(tpl) : null;
+      if (run) pastRuns = [run, ...pastRuns];
+      finished = null;
+      break;
+    }
+    case 'notSameTask':
+      settings = { ...settings, notSame: [...new Set([...settings.notSame, pairKey(a.a, a.b)])] };
+      persistSettings();
       break;
     // Dragging reads the cursor here, in screen pixels, so it works at any zoom.
     case 'dragStart':
@@ -257,9 +445,10 @@ async function act(a: Action) {
       return;
   }
   // Finishing the last task ends the session and shows what you saved.
-  if (run?.endedAt) await endRun(now);
+  if (run?.endedAt && !run.resetAt) await endRun(now);
   persist();
   broadcast();
+  if (a.type.endsWith('Template')) buildMenu();
 }
 
 // ---------- windows ----------
@@ -385,6 +574,9 @@ function buildMenu() {
       { type: 'separator' },
       { label: 'Done (finish task, start the next)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
       { label: 'End session', click: () => void act({ type: 'endRun' }) },
+      ...(templates.length
+        ? [{ label: 'Start a template', submenu: templates.map((t) => ({ label: t.name, click: () => void act({ type: 'startTemplate', id: t.id }) })) }]
+        : []),
       { type: 'separator' },
       {
         label: 'Open at login',
@@ -410,6 +602,7 @@ app.whenReady().then(async () => {
   // No Dock icon, so the panel can float over full-screen apps; the menu bar icon is the way in.
   app.dock?.hide();
   settings = await runStore.loadSettings();
+  templates = await runStore.loadTemplates();
   // Installed means it's in the menu bar: start at login, once, by default. The menu bar icon's
   // "Open at login" turns it off again.
   if (!settings.loginItemSet && app.isPackaged) {

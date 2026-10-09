@@ -14,6 +14,8 @@ let golds = new Map<string, number>();
 let open: string | null = null; // session shown with its tasks
 let liveRunId: string | null = null;
 let period: 'today' | 'week' = 'today';
+let templates: AppState['templates'] = [];
+let openTemplate: string | null = null; // template shown with its tasks; 'new' for a new one
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -128,6 +130,7 @@ function renderSessions() {
     // Open, its name is the place to rename it.
     const title = s.id === open && run ? nameField(run) : el('span', 'title', s.name);
     if (s.id === liveRunId && !s.endedAt) title.append(el('span', 'live', '● NOW'));
+    if (s.reset) title.append(el('span', 'tag', 'reset'));
     row.append(
       title,
       el('span', 'when', new Date(s.startedAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })),
@@ -170,6 +173,84 @@ function detail(run: Run): HTMLElement {
   };
   add(run.tasks.filter((t) => !t.parentId || !run.tasks.some((p) => p.id === t.parentId)), 0);
   if (run.tasks.length) box.append(tasks);
+  // Run it again and race this one: save it as a template.
+  if (!run.templateId && run.tasks.length) {
+    const save = el('button', 'link', 'Save as template');
+    save.type = 'button';
+    save.title = 'Run these tasks again and race your best';
+    save.onclick = () => void api.act({ type: 'saveTemplate', runId: run.id, name: run.name });
+    box.append(save);
+  }
+  return box;
+}
+
+// ---------- templates ----------
+
+/** Your templates: name, tasks, attempts and best run. Click one to edit, start or delete it. */
+function renderTemplates() {
+  const list = $('templates');
+  list.replaceChildren();
+  if (openTemplate === 'new') list.append(templateEditor());
+  if (!templates.length && openTemplate !== 'new') {
+    list.append(el('li', 'empty', 'Save a session as a template to run it again and race your best.'));
+    return;
+  }
+  for (const t of templates) {
+    const li = el('li', t.id === openTemplate ? 'on' : '');
+    const row = el('div', 'row');
+    row.append(
+      el('span', 'title', t.name),
+      el('span', 'count', `${t.tasks} task${t.tasks === 1 ? '' : 's'}`),
+      el('span', 'when', `${t.attempts} attempt${t.attempts === 1 ? '' : 's'}` + (t.resets ? `, ${t.resets} reset` : '')),
+      el('span', 'num', t.bestMs !== undefined ? hms(t.bestMs) : '–'),
+    );
+    row.title = t.bestMs !== undefined ? 'Your fastest run' : 'No finished run yet';
+    row.onclick = () => {
+      openTemplate = openTemplate === t.id ? null : t.id;
+      renderTemplates();
+    };
+    li.append(row);
+    if (t.id === openTemplate) li.append(templateEditor(t));
+    list.append(li);
+  }
+}
+
+/** Name and tasks as text, like Paste a list. Unchanged task names keep their history. */
+function templateEditor(t?: AppState['templates'][number]): HTMLElement {
+  const box = el('div', 'tpl-edit');
+  const name = el('input');
+  name.placeholder = 'Name, e.g. Morning routine';
+  name.value = t?.name ?? '';
+  const text = el('textarea');
+  text.placeholder = '- Mails 10m\n- Plan the day\n  - Calendar 5m\n  - Goals 10m';
+  text.value = t?.text ?? '';
+  const actions = el('div', 'actions');
+  const save = el('button', 'primary', t ? 'Save' : 'Create template');
+  save.type = 'button';
+  save.onclick = () => {
+    if (!text.value.trim()) return;
+    void api.act(t ? { type: 'updateTemplate', id: t.id, name: name.value, text: text.value } : { type: 'createTemplate', name: name.value, text: text.value });
+    openTemplate = null;
+  };
+  actions.append(save);
+  if (t) {
+    const start = el('button', 'link', 'Start it');
+    start.type = 'button';
+    start.onclick = () => void api.act({ type: 'startTemplate', id: t.id });
+    const del = el('button', 'link', 'Delete');
+    del.type = 'button';
+    del.onclick = () => void api.act({ type: 'deleteTemplate', id: t.id });
+    actions.append(start, el('span', 'spacer'), del);
+  } else {
+    const cancel = el('button', 'link', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = () => {
+      openTemplate = null;
+      renderTemplates();
+    };
+    actions.append(cancel);
+  }
+  box.append(name, text, el('div', 'hint', 'One task per line, indent for subtasks, add a time like 15m for an estimate.'), actions);
   return box;
 }
 
@@ -262,9 +343,11 @@ async function load(state?: AppState) {
   const data = await api.listRuns();
   runs = data.runs;
   summaries = data.summaries;
+  templates = s.templates;
   renderOverview();
   renderChart();
   if (!editingName()) renderSessions();
+  if (!$('templates').contains(document.activeElement)) renderTemplates();
 }
 
 let pending: ReturnType<typeof setTimeout> | undefined;
@@ -272,5 +355,10 @@ api.onState((s) => {
   clearTimeout(pending);
   pending = setTimeout(() => void load(s), 250);
 });
+$('newTemplate').onclick = () => {
+  openTemplate = openTemplate === 'new' ? null : 'new';
+  renderTemplates();
+  $('templates').querySelector('input')?.focus();
+};
 await load();
 setInterval(() => void load(), 15_000);

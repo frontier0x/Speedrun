@@ -64,6 +64,34 @@ Click the clock to open the rest (drag it to move it):
 Speedrun doesn't watch your screen, read your apps or send anything anywhere. It's just a timer, and it
 needs no macOS permissions.
 
+## Templates and racing your best
+
+**Templates** are task lists you run again and again, like a morning routine or inbox zero. Save a session
+as a template from its summary ("Save as template") or from Stats, or write one in Stats under Templates
+(one task per line, indent for subtasks, `15m` for an estimate). When your list is empty, your templates
+show up as buttons above the add field; one click loads one. They're also in the menu bar menu.
+
+Every session you start from a template is an **attempt**. A finished one (every task done) is a **run**,
+and your fastest run is the one to beat. Ending a template session shows **Run complete** with its time,
+whether it's a new best (gold) or how far off it was, and where it ranks.
+
+**Reset** (next to End session, for template sessions) is what speedrunners do when a run starts badly:
+the attempt is kept as a reset and the template starts over at 0:00. A reset counts as an attempt, not a
+run, so it doesn't drag down your times or your estimate stats; the time you worked still counts as time
+on tasks.
+
+**Race your best** (Settings › Timer, off by default) adds a line under the clock with your best time for
+the task you're on and how far ahead or behind you are, live. Template tasks compare exactly, even after
+you rename or reorder the template. Other tasks compare by name, ignoring case, estimates, dates, numbers,
+weekdays and little words, so "Emails 9.10." matches "emails". Times under a third of the estimate (ticked
+off by mistake) don't count, and clicking the line tells Speedrun two tasks aren't the same. For
+templates, the session line shows how far ahead of or behind your fastest run you are.
+
+**The moments**: a short 3 · 2 · 1 · Go before a session's clock starts (Esc skips it), the result of each
+task flashing under the clock when you finish it (gold with a sweep on a new best), and a small sound for
+each, a new best and the end of a run. Countdown and sounds can be turned off in Settings › Timer, which
+also sets the volume.
+
 ## Fixing things up
 
 - **Pick a task back up**: click a finished task and its clock runs on from where it stopped. Click the
@@ -101,6 +129,7 @@ npm start
 Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
 
 - `runs/YYYY-MM-DD/run-*.json`: your sessions
+- `templates.json`: your templates
 - `settings.json`: color, opacity and timer position
 
 ## Roadmap

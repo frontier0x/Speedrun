@@ -1,9 +1,11 @@
-import type { AppState, SpeedrunApi } from '../api.js';
+import type { AppState, Flash, SpeedrunApi } from '../api.js';
+import { paceVsBest } from '../race.js';
 import {
   ancestorsOf, childrenOf, formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, pausedTotal, sessionElapsed, taskKey,
   timeSaved, totalElapsed, totalEstimate, type Run, type Task,
 } from '../runs.js';
 import { palette, paletteVars, paintSolid, resolveMode } from '../theme.js';
+import { play, type Sound } from './sounds.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -15,6 +17,9 @@ let golds = new Map<string, number>();
 let editing = false; // hold list re-renders while an inline editor is open
 let pickerFor: string | null = null; // task whose estimate picker is open in the list
 let subFor: string | null = null; // task whose "add a subtask" field is open in the list
+let shimmerUntil = 0; // the clock sweeps gold for a moment after a new best
+
+const sound = (s: Sound) => state?.settings.sounds && play(s, state.settings.soundVolume);
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -133,6 +138,13 @@ function renderFace() {
   const parent = run && t ? ancestorsOf(run, t).at(-1) : undefined;
   $('group').hidden = !parent;
   if (parent) $('groupName').textContent = parent.title;
+  // Racing your best: only when it's on and there's an earlier time for this task.
+  const best = t ? state.race?.bests[t.id] : undefined;
+  $('best').hidden = !best;
+  if (best) {
+    $('bestTime').textContent = formatDuration(best.ms);
+    $('best').title = `Your best: ${formatDuration(best.ms)}, ${best.from}. Click if this isn't the same task.`;
+  }
 }
 
 // ---------- summary ----------
@@ -156,7 +168,38 @@ function renderSummary(run: Run) {
   $('factPaused').textContent = formatDuration(pausedTotal(run));
   $('factPlanned').textContent = saved ? formatDuration(saved.plannedMs) : '–';
   $('factActual').textContent = saved ? formatDuration(saved.actualMs) : '–';
+  // No estimates, no plan to compare: leave those out.
+  $('factPlanned').parentElement!.hidden = !saved;
+  $('factActual').parentElement!.hidden = !saved;
   $('factTasks').textContent = `${leaves.filter((t) => t.done).length}/${leaves.length}`;
+  // A template run, racing your best: the big number is the run's time, gold on a new best.
+  const fin = state.race?.finish;
+  const line = $('raceLine');
+  line.hidden = !fin;
+  $('summaryTitle').textContent = fin?.complete ? 'Run complete' : 'Session done';
+  if (fin) {
+    const [rh, rm] = clockParts(fin.totalMs);
+    $('savedHms').textContent = rh;
+    $('savedMs').textContent = rm;
+    const newBest = fin.complete && fin.rank === 1;
+    const first = fin.runs === 1 && newBest;
+    const vs = fin.previousBestMs !== undefined ? fin.totalMs - fin.previousBestMs : undefined;
+    $('savedClock').className = 'clock ' + (!fin.complete ? 'paused' : newBest ? 'gold' : 'behind');
+    line.className = 'race-line ' + (!fin.complete ? '' : newBest ? 'gold' : 'behind');
+    line.replaceChildren(
+      !fin.complete
+        ? 'Not every task is done, so this one isn\'t ranked'
+        : first
+          ? '★ First run: this is the time to beat'
+          : newBest
+            ? `★ New best ${formatDuration(vs!, { signed: true })}`
+            : `${formatDuration(vs!, { signed: true })} vs. your best`,
+      el('small', '', fin.complete && fin.runs > 1 ? `${fin.rank === 1 ? 'Fastest' : ordinal(fin.rank) + ' fastest'} of ${fin.runs} runs · attempt ${fin.attempts}` : `Attempt ${fin.attempts}`),
+    );
+    $('savedLabel').textContent = saved ? `${formatDuration(Math.abs(net))} ${net >= 0 ? 'saved against' : 'over'} your plan` : '';
+  }
+  // Already a template? Then there's nothing to save.
+  $('saveTplBtn').hidden = Boolean(run.templateId);
   const tot = state.totals;
   $('totToday').textContent = `${formatDuration(tot.todayMs)} · ${formatDuration(tot.todayPausedMs)} paused`;
   $('totWeek').textContent = `${formatDuration(tot.weekMs)} · ${formatDuration(tot.weekPausedMs)} paused`;
@@ -169,7 +212,23 @@ function renderControls() {
   sw.classList.toggle('on', state.settings.countdown);
   sw.setAttribute('aria-checked', String(state.settings.countdown));
   $('endBtn').hidden = !state.run;
+  $('resetBtn').hidden = !state.run?.templateId;
+  // Templates, only while the list is empty.
+  const chips = $('tplChips');
+  const empty = !state.run?.tasks.length;
+  chips.hidden = !empty || !state.templates.length;
+  chips.replaceChildren(
+    ...state.templates.map((tpl) => {
+      const b = el('button', '', tpl.name);
+      b.type = 'button';
+      b.title = `${tpl.tasks} task${tpl.tasks === 1 ? '' : 's'}` + (tpl.bestMs !== undefined ? `, best ${formatDuration(tpl.bestMs)}` : '');
+      b.onclick = () => void api.act({ type: 'startTemplate', id: tpl.id });
+      return b;
+    }),
+  );
 }
+
+const ordinal = (n: number) => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
 
 function closePicker() {
   editing = false;
@@ -433,7 +492,14 @@ function frame() {
     let tone = 'idle';
     if (t && isRunning()) tone = t.estimateMs === undefined ? '' : ms <= t.estimateMs ? 'ahead' : 'behind';
     else if (t && ms > 0) tone = 'paused';
-    clock.className = 'clock ' + tone;
+    clock.className = 'clock ' + tone + (performance.now() < shimmerUntil ? ' shimmer' : '');
+
+    const best = t ? state.race?.bests[t.id] : undefined;
+    if (best && !$('best').hidden) {
+      const d = ms - best.ms;
+      $('bestDelta').textContent = d <= 0 ? `${formatDuration(-d)} ahead` : `${formatDuration(d)} behind`;
+      $('bestDelta').className = 'saved ' + (d <= 0 ? 'ahead' : 'behind');
+    }
 
     // Session: all time on this run's tasks, colored by what you've saved or lost so far.
     const session = $('session');
@@ -448,6 +514,14 @@ function frame() {
       const out = $('sessionSaved');
       out.textContent = !planned ? '' : !saved ? 'on plan' : net >= 0 ? `${formatDuration(net)} saved` : `${formatDuration(-net)} behind`;
       out.className = 'saved ' + tone;
+      // Racing a template: how you're doing against your fastest run, instead of against the plan.
+      const bestRun = state.race?.bestRun;
+      const pace = bestRun ? paceVsBest(run, bestRun) : undefined;
+      if (pace !== undefined) {
+        out.textContent = `${formatDuration(Math.abs(pace))} ${pace <= 0 ? 'ahead of' : 'behind'} your best`;
+        out.className = 'saved ' + (pace <= 0 ? 'ahead' : 'behind');
+        out.title = saved ? `${formatDuration(Math.abs(net))} ${net >= 0 ? 'saved against' : 'over'} your plan` : '';
+      }
       if (run.pausedSince !== undefined) {
         out.textContent = `Pause ${formatDuration(pausedTotal(run))}`;
         out.className = 'saved paused';
@@ -641,7 +715,87 @@ function wire() {
     $('addInput').focus();
   });
 
+  // Template on the summary: name it, Enter saves. The session becomes its first attempt.
+  $('saveTplBtn').onclick = () => {
+    const form = $('saveTplForm');
+    form.hidden = !form.hidden;
+    const input = $<HTMLInputElement>('saveTplName');
+    input.value = state.finished?.name ?? '';
+    if (!form.hidden) input.select();
+  };
+  $('saveTplForm').onsubmit = (e) => {
+    e.preventDefault();
+    const fin = state.finished;
+    if (!fin) return;
+    void api.act({ type: 'saveTemplate', runId: fin.id, name: $<HTMLInputElement>('saveTplName').value });
+    $('saveTplForm').hidden = true;
+  };
+  $('resetBtn').onclick = () => void api.act({ type: 'resetRun' });
+  $('best').addEventListener('mousedown', (e) => e.stopPropagation());
+  $('best').onclick = () => {
+    const t = currentTask();
+    const best = t ? state.race?.bests[t.id] : undefined;
+    if (!t || !best) return;
+    if (confirm(`Is "${t.title}" a different task from the one in ${best.from}? Speedrun won't compare them again.`))
+      void api.act({ type: 'notSameTask', a: taskKey(t.title), b: best.key });
+  };
+
+  // 3 · 2 · 1 · Go before the first second of a session.
+  let countdownTimers: ReturnType<typeof setTimeout>[] = [];
+  api.onCountdown((ms) => {
+    countdownTimers.forEach(clearTimeout);
+    countdownTimers = [];
+    const view = $('countdownView');
+    const panel = $('panel');
+    if (!ms) {
+      view.hidden = true;
+      panel.classList.remove('counting');
+      return;
+    }
+    const step = ms / 4;
+    const show = (text: string, go = false) => {
+      view.hidden = false;
+      view.className = 'countdown' + (go ? ' go' : '');
+      view.replaceChildren(el('span', '', text));
+      sound(go ? 'go' : 'beep');
+    };
+    panel.classList.add('counting');
+    ['3', '2', '1'].forEach((n, i) => countdownTimers.push(setTimeout(() => show(n), i * step)));
+    countdownTimers.push(setTimeout(() => show('Go', true), 3 * step));
+    countdownTimers.push(setTimeout(() => {
+      view.hidden = true;
+      panel.classList.remove('counting');
+    }, ms + 250));
+  });
+
+  // Finishing a task: its result for a moment where the lines under the clock are.
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
+  api.onFlash((f: Flash) => {
+    const box = $('flash');
+    const parts: (string | HTMLElement)[] = [el('b', '', formatDuration(f.elapsedMs))];
+    if (f.newBest && f.bestMs !== undefined) parts.push(el('b', 'gold', `★ New best ${formatDuration(f.elapsedMs - f.bestMs, { signed: true })}`));
+    else if (f.bestMs !== undefined) parts.push(el('b', 'behind', formatDuration(f.elapsedMs - f.bestMs, { signed: true })), 'vs. your best');
+    else if (f.estimateMs !== undefined) {
+      const d = f.elapsedMs - f.estimateMs;
+      parts.push(el('b', d <= 0 ? 'ahead' : 'behind', formatDuration(d, { signed: true })), d <= 0 ? 'under your estimate' : 'over your estimate');
+    } else parts.push('done');
+    box.replaceChildren(...parts);
+    box.hidden = false;
+    $('panel').classList.add('flashing');
+    if (f.newBest) shimmerUntil = performance.now() + 1200;
+    sound(f.newBest ? 'best' : 'split');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => {
+      box.hidden = true;
+      $('panel').classList.remove('flashing');
+    }, 1600);
+  });
+
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('panel').classList.contains('counting')) {
+      void api.act({ type: 'skipCountdown' });
+      return;
+    }
     if (e.key !== 'Escape') return;
     if (pickerFor || subFor || !paste.hidden) {
       closePicker();
@@ -660,8 +814,11 @@ function wire() {
 
 wire();
 api.onState((s) => {
+  // The end of a session gets its own sound.
+  const justFinished = s.finished && s.finished.id !== state?.finished?.id;
   state = s;
   render();
+  if (justFinished) sound('finish');
 });
 state = await api.getState();
 render();

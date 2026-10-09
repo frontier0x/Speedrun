@@ -15,6 +15,8 @@ export interface Task {
   doneAt?: string;
   /** Tasks with children are sections; their time is the sum of their children. */
   parentId?: string;
+  /** Which task of its template this is, when the session came from a template. Never changes. */
+  templateTaskId?: string;
 }
 
 export interface Run {
@@ -32,6 +34,10 @@ export interface Run {
   pausedMs?: number;
   /** Epoch ms when the current pause began; undefined unless you paused. */
   pausedSince?: number;
+  /** The template this session was started from: each session of it is an attempt. */
+  templateId?: string;
+  /** Set when you reset the attempt: it counts as an attempt, not a finished run. */
+  resetAt?: string;
 }
 
 export interface Settings {
@@ -53,6 +59,15 @@ export interface Settings {
   scale: number;
   /** The first-start tips have been seen. */
   onboarded: boolean;
+  /** Race your best: show your best time for each task and, for templates, your fastest run's pace. */
+  race: boolean;
+  /** 3 · 2 · 1 · Go before a session's clock starts. */
+  startCountdown: boolean;
+  /** Little sounds for the countdown, finishing a task, a new best and the end of a run. */
+  sounds: boolean;
+  soundVolume: number;
+  /** Task pairs you said aren't the same task ("a|b", by matching key), so they're never compared. */
+  notSame: string[];
   /** We've turned on "Open at login" once, on first start; after that it's yours to switch. */
   loginItemSet?: boolean;
   overlayBounds?: { x: number; y: number; width: number; height: number };
@@ -69,6 +84,11 @@ export const DEFAULT_SETTINGS: Settings = {
   precision: 'ms',
   scale: 1,
   onboarded: false,
+  race: false,
+  startCountdown: true,
+  sounds: true,
+  soundVolume: 0.35,
+  notSame: [],
 };
 
 export const MIN_SCALE = 0.6;
@@ -473,7 +493,23 @@ export function newRun(mode: Mode, now = new Date()): Run {
 
 // ---------- history ----------
 
-export const taskKey = (title: string) => title.toLowerCase().replace(/\s+/g, ' ').trim();
+const WEEKDAYS =
+  /\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mo|di|mi|do|fr|sa|so|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|kw|cw|week|woche|today|heute)\b/g;
+
+/**
+ * The name a task is matched by across sessions: lowercase, without its estimate, dates, numbers,
+ * weekdays or punctuation. "Emails 9.10.", "emails!" and "Emails (Mon) 15m" all become "emails".
+ */
+export function taskKey(title: string): string {
+  return splitEstimate(title)
+    .title.toLowerCase()
+    .replace(/\d{1,4}[./-]\d{1,2}(?:[./-]\d{1,4})?\.?/g, ' ')
+    .replace(/\d+/g, ' ')
+    .replace(WEEKDAYS, ' ')
+    .replace(/[^\p{L}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 /** Best finished time per task title across past runs: the speedrunner's gold splits. */
 export function goldSplits(runs: Run[]): Map<string, number> {
@@ -503,6 +539,9 @@ export interface RunSummary {
   onEstimateRate?: number;
   /** Time saved against your estimates; negative means over. See timeSaved. */
   savedMs?: number;
+  /** You reset this attempt: its time counts as time on tasks, but not toward saved time or estimates. */
+  reset: boolean;
+  templateId?: string;
 }
 
 export function summarize(run: Run, now = Date.now()): RunSummary {
@@ -519,7 +558,9 @@ export function summarize(run: Run, now = Date.now()): RunSummary {
     tasksDone: leaves.filter((t) => t.done).length,
     tasksTotal: leaves.length,
     pausedMs: pausedTotal(run, now),
-    onEstimateRate: estimated.length ? estimated.filter((t) => t.elapsedMs <= t.estimateMs!).length / estimated.length : undefined,
-    savedMs: timeSaved(run, now)?.savedMs,
+    onEstimateRate: !run.resetAt && estimated.length ? estimated.filter((t) => t.elapsedMs <= t.estimateMs!).length / estimated.length : undefined,
+    savedMs: run.resetAt ? undefined : timeSaved(run, now)?.savedMs,
+    reset: Boolean(run.resetAt),
+    templateId: run.templateId,
   };
 }

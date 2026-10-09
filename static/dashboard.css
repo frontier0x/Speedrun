@@ -61,6 +61,18 @@ main { max-width: 520px; margin: 0 auto; padding: 0 18px 28px; display: flex; fl
 .row .num { min-width: 52px; text-align: right; }
 .live { color: var(--ahead); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; margin-left: 6px; }
 .empty { color: var(--dim); padding: 18px 8px; }
+.tag { font-size: 10px; color: var(--dim); border: 1px solid var(--faint); border-radius: 999px; padding: 0 6px; margin-left: 6px; font-weight: 400; }
+
+/* ---------- templates ---------- */
+button.link { padding: 0; border: none; background: none; font-size: 12px; color: var(--dim); cursor: pointer; }
+button.link:hover { color: var(--clock); }
+.tpl-edit { display: flex; flex-direction: column; gap: 8px; padding: 2px 8px 12px; }
+.tpl-edit input, .tpl-edit textarea { color: var(--text); background: var(--faint); border-color: transparent; border-radius: 8px; }
+.tpl-edit input { font-weight: 600; padding: 6px 8px; }
+.tpl-edit textarea { font-size: 12px; line-height: 1.5; resize: vertical; min-height: 110px; padding: 8px; }
+.tpl-edit .actions { display: flex; align-items: center; gap: 14px; }
+.tpl-edit .primary { padding: 5px 12px; border-radius: 8px; border: none; background: var(--button-fill, var(--button)); color: var(--button-ink); font-weight: 600; font-size: 12px; cursor: pointer; }
+.tpl-edit .hint { font-size: 11px; color: var(--dim); }
 
 .detail { padding: 2px 8px 12px; display: flex; flex-direction: column; gap: 10px; }
 .row .name {
