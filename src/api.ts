@@ -24,6 +24,9 @@ export interface AppState {
 export type Action =
   | { type: 'quickAdd'; text: string }
   | { type: 'addSubtask'; parentId: string; text: string }
+  | { type: 'indent'; id: string }
+  | { type: 'outdent'; id: string }
+  | { type: 'shift'; id: string; dir: -1 | 1 }
   | { type: 'resumeSession' }
   | { type: 'continueWith'; text: string }
   | { type: 'renameRun'; id: string; name: string }

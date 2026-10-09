@@ -5,7 +5,7 @@ import {
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
   pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate, parseTimeInput, reopenTask, setElapsed,
   addSubtask, toggleDone, ancestorsOf, matchKey, similarity, templateFromRun, runFromTemplate, templateRecord, templateToText,
-  templateFromText, bestFor, bestIndex, pbPace, medal, pairKey, type Run,
+  templateFromText, bestFor, bestIndex, pbPace, medal, pairKey, type Run, indentTask, outdentTask, shiftTask,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -257,4 +257,24 @@ test('free tasks race a similar name unless you said it is not the same task', (
   assert.equal(medal(t, undefined), 'bronze');
   assert.equal(medal({ ...t, elapsedMs: 25 * MIN }, undefined), 'silver');
   assert.equal(medal({ ...t, elapsedMs: 25 * MIN }, { ms: 26 * MIN, from: '', at: '', key: '', fuzzy: false }), 'gold');
+});
+
+test('Tab and Shift+Tab move tasks in and out of subtasks, carrying their own subtasks', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- Page\n  - Hero\n- Copy\n  - Headline\n- Emails'));
+  const [page, , copy, headline, emails] = run.tasks;
+  const titles = () => run.tasks.map((t) => (t.parentId ? (run.tasks.find((p) => p.id === t.parentId)!.title + ' > ') : '') + t.title);
+
+  indentTask(run, copy.id); // Copy (with Headline) goes under Page
+  assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Page > Copy', 'Copy > Headline', 'Emails']);
+  outdentTask(run, copy.id); // back out, right after Page's other subtasks
+  assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Copy', 'Copy > Headline', 'Emails']);
+  indentTask(run, emails.id);
+  outdentTask(run, headline.id); // Headline out of Copy: after Copy's block, before nothing else
+  assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Copy', 'Copy > Emails', 'Headline']);
+  shiftTask(run, copy.id, -1); // Copy and its subtask swap with Page and its subtask
+  assert.deepEqual(titles(), ['Copy', 'Copy > Emails', 'Page', 'Page > Hero', 'Headline']);
+  shiftTask(run, copy.id, 1);
+  assert.deepEqual(titles(), ['Page', 'Page > Hero', 'Copy', 'Copy > Emails', 'Headline']);
+  assert.equal(page.parentId, undefined);
 });

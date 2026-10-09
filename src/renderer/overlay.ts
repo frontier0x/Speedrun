@@ -273,10 +273,10 @@ function renderList() {
   const run = state.run;
   if (!run || !run.tasks.length) return;
   const current = currentTask();
-  const finished = (t: Task) => (isSection(run, t) ? isSectionDone(run, t) : t.done);
-  // Up next in priority order, finished ones underneath; subtasks sit under their task, indented.
+  // Your order, top to bottom: new tasks go at the end, finished ones stay where they are.
+  // Subtasks sit under their task, indented.
   const add = (tasks: Task[], depth: number) => {
-    for (const t of [...tasks.filter((x) => !finished(x)), ...tasks.filter(finished)]) {
+    for (const t of tasks) {
       list.append(row(run, t, t === current, depth));
       if (pickerFor === t.id) {
         const li = el('li', 'row-picker');
@@ -292,6 +292,37 @@ function renderList() {
     }
   };
   add(run.tasks.filter((t) => !t.parentId || !run.tasks.some((p) => p.id === t.parentId)), 0);
+  // Keep keyboard focus on the task you just moved or indented.
+  if (focusId) list.querySelector<HTMLElement>(`li[data-id="${focusId}"]`)?.focus();
+}
+
+let focusId: string | null = null;
+
+/**
+ * Keyboard for a task in the list: Tab makes it a subtask of the task above, Shift+Tab a task again,
+ * ⌥↑ / ⌥↓ move it (with its subtasks). Dragging works too.
+ */
+function listKeys(li: HTMLLIElement, t: Task) {
+  li.tabIndex = 0;
+  li.dataset.id = t.id;
+  li.onfocus = () => (focusId = t.id);
+  li.onblur = () => {
+    if (focusId === t.id) setTimeout(() => !document.activeElement?.closest('.list') && (focusId = null));
+  };
+  li.onkeydown = (e) => {
+    if (e.target !== li) return;
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      void api.act({ type: e.shiftKey ? 'outdent' : 'indent', id: t.id });
+    } else if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      void api.act({ type: 'shift', id: t.id, dir: e.key === 'ArrowUp' ? -1 : 1 });
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const rows = [...$('list').querySelectorAll<HTMLElement>('li[data-id]')];
+      rows[rows.indexOf(li) + (e.key === 'ArrowUp' ? -1 : 1)]?.focus();
+    } else if (e.key === 'Enter') li.click();
+  };
 }
 
 /** Type a subtask and hit Enter; the field stays open for the next one. */
@@ -355,6 +386,8 @@ function groupRow(run: Run, t: Task, depth: number): HTMLLIElement {
     li.append(el('span', 'num ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
   } else li.append(estimateButton(t, est));
   li.append(subtaskButton(t), removeButton(t));
+  listKeys(li, t);
+  dragRow(li, t);
   return li;
 }
 
@@ -449,6 +482,11 @@ function row(run: Run, t: Task, current: boolean, depth: number): HTMLLIElement 
     li.onclick = () => void api.act({ type: 'reopen', id: t.id });
   } else {
     if (spent >= 1000 || current) li.append(timeCell(t, spent, 'num'));
+    if (current && t.estimateMs !== undefined) {
+      const left = el('span', 'left');
+      left.dataset.left = t.id;
+      li.append(left);
+    }
     li.append(estimateButton(t), subtaskButton(t));
     // Click a task to work on it; click the current one while paused to carry on.
     const runningThis = current && isRunning();
@@ -457,9 +495,18 @@ function row(run: Run, t: Task, current: boolean, depth: number): HTMLLIElement 
   }
 
   li.append(removeButton(t));
+  listKeys(li, t);
+  dragRow(li, t);
+  return li;
+}
 
+/** Drag a task onto another to put it (and its subtasks) above it. */
+function dragRow(li: HTMLLIElement, t: Task) {
   li.draggable = true;
-  li.ondragstart = () => (dragId = t.id);
+  li.ondragstart = (e) => {
+    dragId = t.id;
+    e.stopPropagation();
+  };
   li.ondragend = () => (dragId = null);
   li.ondragover = (e) => {
     e.preventDefault();
@@ -471,7 +518,6 @@ function row(run: Run, t: Task, current: boolean, depth: number): HTMLLIElement 
     li.classList.remove('drop');
     if (dragId && dragId !== t.id) void api.act({ type: 'move', id: dragId, beforeId: t.id });
   };
-  return li;
 }
 
 /** A task's time. Click it to correct it: 12:30, 1:02:03 or 25m. */
@@ -616,15 +662,13 @@ function frame() {
             (best.fuzzy ? `. Matched a similar task (“${best.key}”): click if it's not the same.` : '')
           : 'Against your fastest run of this template';
       }
-      const delta = $('delta');
-      if (html) delta.textContent = '';
-      else if (t?.estimateMs !== undefined && ms > 0) {
+      // What's left of the current task's estimate, or how far over, sits next to it in the list.
+      const left = document.querySelector<HTMLElement>('.list [data-left]');
+      if (left && t?.estimateMs !== undefined) {
         const d = t.estimateMs - ms;
-        // Counting down, the clock already shows what's left, so say how long it's been instead.
-        if (state.settings.countdown) delta.textContent = `${formatDuration(ms)} in`;
-        else delta.textContent = d >= 0 ? `${formatDuration(d)} left` : `${formatDuration(-d)} over`;
-        delta.className = 'delta ' + (d >= 0 ? 'ahead' : 'behind');
-      } else delta.textContent = '';
+        left.textContent = ms < 1000 ? '' : d >= 0 ? `${formatDuration(d)} left` : `${formatDuration(-d)} over`;
+        left.className = 'left ' + (d >= 0 ? 'ahead' : 'behind');
+      }
     }
   }
   requestAnimationFrame(frame);
@@ -733,11 +777,33 @@ function wire() {
   };
   $('countdownBtn').onclick = () => void api.act({ type: 'settings', patch: { countdown: !state.settings.countdown } });
 
+  // Tab in the add field: the next task goes in as a subtask of the last task. Shift+Tab: a task again.
+  const addInput = $<HTMLInputElement>('addInput');
+  const lastTask = () => {
+    const run = state.run;
+    const roots = run?.tasks.filter((t) => !t.parentId) ?? [];
+    return roots.at(-1);
+  };
+  let addAsSub = false;
+  const showAddLevel = () => {
+    const parent = addAsSub ? lastTask() : undefined;
+    if (!parent) addAsSub = false;
+    $('addForm').classList.toggle('sub', addAsSub);
+    addInput.placeholder = parent ? `Subtask of ${parent.title}, e.g. Hero 20m` : 'Add a task, e.g. Write copy 30m';
+  };
+  addInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+    addAsSub = !e.shiftKey;
+    showAddLevel();
+  });
   $('addForm').onsubmit = (e) => {
     e.preventDefault();
-    const input = $<HTMLInputElement>('addInput');
-    if (input.value.trim()) void api.act({ type: 'quickAdd', text: input.value });
-    input.value = '';
+    const text = addInput.value.trim();
+    if (!text) return;
+    const parent = addAsSub ? lastTask() : undefined;
+    void api.act(parent ? { type: 'addSubtask', parentId: parent.id, text } : { type: 'quickAdd', text });
+    addInput.value = '';
   };
 
   const paste = $('paste');

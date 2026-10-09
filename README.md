@@ -45,19 +45,23 @@ bigger or smaller.
 the clock shows milliseconds and seconds, and every color. Each color can be solid or a gradient; type any
 hex like `#3fd68a` or `#00000080` (the last two digits are opacity), or start from a preset.
 
-Click the clock to open the rest (drag it to move it):
+Click the clock to open the rest (drag it to move it). Open, the clock sits on top with the task you're
+on below it in larger type, then the session.
 
 - **Shortcuts**: `⌘⇧Space` is go/pause and `⌘⇧↩` is done, from any app.
-- **Your list**: click a task to switch to it, drag to reorder, double-click to rename, click its
-  estimate to change it. Finished tasks show their time and how far under or over the estimate they
+- **Your list** stays in your order: new tasks go at the end and finished ones stay where they are. Click
+  a task to switch to it, double-click to rename, click its estimate to change it. The task you're on
+  shows what's left of its estimate (or how far over) right next to it. Finished tasks show their time and how far under or over the estimate they
   were, in gold if you beat your best time for that task. Estimates: pick 5m to 2h or type any time.
-- **Subtasks**: hover a task and click **+**. A task with subtasks shows their total time, how many are
+- **Moving and nesting**: drag a task, or select it and press `⌥↑` / `⌥↓`; its subtasks always move
+  with it. `Tab` makes a task a subtask of the one above, `Shift+Tab` a task again. In the add field,
+  `Tab` makes the next task a subtask of your last task and `Shift+Tab` switches back.
+- **Subtasks**: hover a task and click **+**, or use `Tab`. A task with subtasks shows their total time, how many are
   done and the sum of their estimates (or its own estimate, if you give it one). While you work on a
   subtask, the folded timer shows its task's total time and what's left under the clock. Ticking the
   task ticks all its subtasks. Time saved counts the subtask estimates, or the task's own if its
   subtasks have none.
-- **Add a task** one at a time (`Write copy 30m` sets a 30-minute estimate, a leading `!` puts it on
-  top), or **Paste a list**: bullets, checkboxes, `#` headings and indentation become tasks and
+- **Add a task** one at a time (`Write copy 30m` sets a 30-minute estimate), or **Paste a list**: bullets, checkboxes, `#` headings and indentation become tasks and
   sections, and `30m`, `~30m`, `(1h)` or `[45m]` become estimates.
 - **End session** saves it and shows what you saved; the next task you add starts a fresh session.
 

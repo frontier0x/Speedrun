@@ -505,6 +505,69 @@ export function moveTask(run: Run, id: string, beforeId: string | null): Run {
   return run;
 }
 
+/** A task with everything under it, in list order. */
+function blockOf(run: Run, id: string): Task[] {
+  const ids = new Set([id]);
+  for (const t of run.tasks) if (t.parentId && ids.has(t.parentId)) ids.add(t.id);
+  return run.tasks.filter((t) => ids.has(t.id));
+}
+
+/** The task just above at the same level (same parent), if any. */
+function siblingBefore(run: Run, t: Task): Task | undefined {
+  const sibs = run.tasks.filter((x) => (x.parentId ?? null) === (t.parentId ?? null));
+  return sibs[sibs.indexOf(t) - 1];
+}
+
+/**
+ * Tab: the task becomes a subtask of the task above it (same level), after that task's other
+ * subtasks. Its own subtasks come along. If the clock was on the new parent, it moves to this task.
+ */
+export function indentTask(run: Run, id: string, now = Date.now()): Run {
+  const t = run.tasks.find((x) => x.id === id);
+  const parent = t && siblingBefore(run, t);
+  if (!t || !parent) return run;
+  t.parentId = parent.id;
+  if (parent.done) {
+    parent.done = false;
+    parent.doneAt = undefined;
+  }
+  if (run.activeTaskId === parent.id) {
+    const running = run.activeSince !== undefined;
+    stopClock(run, now);
+    run.activeTaskId = t.id;
+    if (running) run.activeSince = now;
+  }
+  return run;
+}
+
+/**
+ * Shift+Tab: a subtask becomes a task again, one level up, placed right after its old parent's
+ * subtasks. Its own subtasks come along.
+ */
+export function outdentTask(run: Run, id: string): Run {
+  const t = run.tasks.find((x) => x.id === id);
+  const parent = t?.parentId ? run.tasks.find((x) => x.id === t.parentId) : undefined;
+  if (!t || !parent) return run;
+  const moving = blockOf(run, id);
+  const rest = run.tasks.filter((x) => !moving.includes(x));
+  const parentBlock = blockOf({ ...run, tasks: rest }, parent.id);
+  const at = rest.indexOf(parentBlock[parentBlock.length - 1]) + 1;
+  t.parentId = parent.parentId;
+  run.tasks = [...rest.slice(0, at), ...moving, ...rest.slice(at)];
+  return run;
+}
+
+/** ⌥↑ / ⌥↓: swaps a task, with its subtasks, with the one above or below at the same level. */
+export function shiftTask(run: Run, id: string, dir: -1 | 1): Run {
+  const t = run.tasks.find((x) => x.id === id);
+  if (!t) return run;
+  const sibs = run.tasks.filter((x) => (x.parentId ?? null) === (t.parentId ?? null));
+  const other = sibs[sibs.indexOf(t) + dir];
+  if (!other) return run;
+  const [first, second] = dir < 0 ? [t, other] : [other, t];
+  return moveTask(run, first.id, second.id);
+}
+
 export function newRun(mode: Mode, now = new Date()): Run {
   const name = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' session';
   return { id: now.toISOString().replace(/[:.]/g, '-'), name, mode, startedAt: now.toISOString(), tasks: [] };

@@ -171,8 +171,8 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .list li.group:hover { background: var(--faint); }
 .list .count { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
 .list .est.summed { border-style: dashed; }
-.list .plus { opacity: 0; color: var(--dim); background: none; border: none; padding: 0 2px; font-size: 15px; line-height: 1; }
-.list li:hover .plus { opacity: 1; }
+.list .plus { display: none; color: var(--dim); background: none; border: none; padding: 0 2px; font-size: 15px; line-height: 1; }
+.list li:hover .plus, .list li:focus-visible .plus { display: block; }
 .list .plus:hover { color: var(--clock); }
 .list .row-sub { cursor: default; padding-top: 2px; padding-bottom: 4px; }
 .list .row-sub:hover { background: none; }
@@ -196,8 +196,9 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .list .time-input { width: 74px; padding: 2px 6px; font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
 .list .est { font-size: 11px; color: var(--dim); padding: 1px 7px; border-radius: 999px; border: 1px solid var(--faint); background: none; }
 .list .est:hover { color: var(--clock); border-color: var(--dim); }
-.list .x { opacity: 0; color: var(--dim); background: none; border: none; padding: 0 2px; font-size: 14px; }
-.list li:hover .x { opacity: 1; }
+.list .x { display: none; line-height: 1; color: var(--dim); background: none; border: none; padding: 0 2px; font-size: 14px; }
+/* + and × show on hover and take no room otherwise, so times and estimates line up on the right. */
+.list li:hover .x, .list li:focus-visible .x { display: block; }
 .list li.drop { box-shadow: inset 0 2px 0 var(--clock); }
 .list .row-picker { padding: 2px 8px 8px 32px; }
 .list .row-picker:hover { background: none; }
@@ -282,3 +283,23 @@ button.text:hover { color: var(--clock); background: none; }
 input::-webkit-calendar-picker-indicator { display: none !important; }
 .mode-row .race:not([hidden]) ~ .spacer { display: none; }
 .delta:empty { display: none; }
+
+/* ---------- open: clock on top, then the task, bigger, then the lines ---------- */
+.face { display: flex; flex-direction: column; }
+.panel.open .face { padding-top: 26px; }
+.panel.open .clock-row { order: 1; }
+.panel.open .head { order: 2; margin-top: 4px; }
+.panel.open .face > .session { order: 3; }
+.panel.open .face > .flash { order: 4; }
+.panel.open .task { font-size: 16px; font-weight: 600; padding-right: 0; }
+.panel.open .tick { width: 15px; height: 15px; }
+
+/* What's left of the current task's estimate, right next to it in the list. */
+.list .left { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 11px; white-space: nowrap; }
+.list .left.ahead { color: var(--ahead); }
+.list .left.behind { color: var(--behind); }
+.list li:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--dim); }
+
+/* Tab in the add field: the next task goes in as a subtask. */
+.add.sub { padding-left: 18px; }
+.add.sub input { border-left: 2px solid var(--dim); }

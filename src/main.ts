@@ -8,6 +8,7 @@ import {
   moveTask, newRun, nextTask, pairKey, parseDuration, parseQuickAdd, parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, runFromTemplate, setElapsed,
   removeTask, runElapsed, startTask, summarize, templateFromRun, templateFromText, templateRecord, toggleDone, type Best, type Run, type Settings,
   type Template,
+  indentTask, outdentTask, shiftTask,
 } from './runs.js';
 import { RunStore } from './runStore.js';
 
@@ -198,6 +199,15 @@ async function act(a: Action) {
       if (q) addTasks(ensureRun(), [q.task], q.urgent);
       break;
     }
+    case 'indent':
+      if (run) indentTask(run, a.id, now);
+      break;
+    case 'outdent':
+      if (run) outdentTask(run, a.id);
+      break;
+    case 'shift':
+      if (run) shiftTask(run, a.id, a.dir);
+      break;
     case 'addSubtask': {
       const q = parseQuickAdd(a.text);
       if (run && q) addSubtask(run, a.parentId, q.task, now);
