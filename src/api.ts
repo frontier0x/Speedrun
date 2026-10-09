@@ -39,7 +39,7 @@ export type Action =
   | { type: 'resetRun' }
   | { type: 'notSame'; taskId: string }
   | { type: 'skipCountIn' }
-  | { type: 'copyResult'; rect: { x: number; y: number; width: number; height: number } }
+  | { type: 'copyResult'; rect: { x: number; y: number; width: number; height: number }; from?: 'stats' }
   | { type: 'import'; text: string }
   | { type: 'importFile' }
   | { type: 'start'; id: string }

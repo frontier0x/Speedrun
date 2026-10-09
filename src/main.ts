@@ -324,11 +324,12 @@ async function act(a: Action) {
       finishCountIn(now);
       break;
     case 'copyResult':
-      // The finish screen as a picture, ready to paste anywhere.
-      if (overlay && !overlay.isDestroyed()) {
-        const z = settings.scale;
+      // A session as a picture, ready to paste anywhere: from Stats (or the timer, which is zoomed).
+      const win = a.from === 'stats' ? dashboard : overlay;
+      if (win && !win.isDestroyed()) {
+        const z = win === overlay ? settings.scale : 1;
         const r = a.rect;
-        const img = await overlay.webContents.capturePage({ x: Math.floor(r.x * z), y: Math.floor(r.y * z), width: Math.ceil(r.width * z), height: Math.ceil(r.height * z) });
+        const img = await win.webContents.capturePage({ x: Math.floor(r.x * z), y: Math.floor(r.y * z), width: Math.ceil(r.width * z), height: Math.ceil(r.height * z) });
         await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(img.toPNG())], { type: 'image/png' }) })]);
       }
       return;
@@ -442,8 +443,10 @@ async function act(a: Action) {
       buildMenu();
       return;
   }
-  // Finishing the last task ends the session and shows what you saved.
-  if (run?.endedAt) await endRun(now);
+  // Finishing the last task of a template run ends it: the run is complete. A plain session stays open
+  // for the next task you think of; End session ends it.
+  if (run?.endedAt && run.templateId) await endRun(now);
+  else if (run?.endedAt) run.endedAt = undefined;
   persist();
   broadcast();
 }

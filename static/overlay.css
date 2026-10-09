@@ -273,7 +273,7 @@ button.text:hover { color: var(--clock); background: none; }
 .paste input { padding: 7px 10px; font-size: 12px; border-radius: 10px; }
 
 /* The finish: PB and rank, and a medal per task. */
-.result { display: flex; flex-direction: column; gap: 4px; background: var(--background-fill); }
+.result { display: flex; flex-direction: column; gap: 4px; }
 .rank { font-size: 12px; color: var(--dim); margin: -6px 0 8px; }
 .saved-label.gold { color: var(--gold); font-weight: 600; }
 .saved-label.behind { color: var(--behind); }
@@ -324,3 +324,6 @@ input::-webkit-calendar-picker-indicator { display: none !important; }
 .mode-row:has(> .race[hidden]) { display: none; }
 /* Countdown, at the very bottom. */
 .bottom { display: flex; margin-top: -2px; }
+
+/* Folded, the task line already names the task; its group's line only shows when the timer is open. */
+.panel:not(.open) .session.group { display: none; }
