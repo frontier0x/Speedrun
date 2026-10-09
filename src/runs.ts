@@ -465,7 +465,7 @@ export function moveTask(run: Run, id: string, beforeId: string | null): Run {
 }
 
 export function newRun(mode: Mode, now = new Date()): Run {
-  const name = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' run';
+  const name = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ' session';
   return { id: now.toISOString().replace(/[:.]/g, '-'), name, mode, startedAt: now.toISOString(), tasks: [] };
 }
 

@@ -152,6 +152,17 @@ async function act(a: Action) {
     case 'endRun':
       await endRun(now);
       break;
+    case 'renameRun': {
+      // Sessions you rename in Stats: the current one, the one just ended, or any saved before.
+      const name = a.name.trim();
+      if (!name) return;
+      const known = [run, finished, ...pastRuns].find((r) => r?.id === a.id);
+      const target = known ?? (await runStore.list()).find((r) => r.id === a.id);
+      if (!target) return;
+      target.name = name;
+      await runStore.save(target);
+      break;
+    }
     case 'dismissSummary':
       finished = null;
       break;
@@ -333,7 +344,7 @@ function buildMenu() {
       { label: 'Dashboard', click: openDashboard },
       { label: 'Settings…', click: openSettings },
       { type: 'separator' },
-      { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
+      { label: 'Done: finish the task, start the next', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
       { label: 'End session', click: () => void act({ type: 'endRun' }) },
       { type: 'separator' },
       {

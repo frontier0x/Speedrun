@@ -52,3 +52,9 @@ tr.open td:first-child { color: var(--muted); }
   padding: 6px 9px; font-size: 12px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4); z-index: 10;
 }
 @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+
+/* A session's name: click to rename it. */
+.detail h3.rename { cursor: text; border-radius: 6px; margin-left: -6px; padding: 0 6px; display: inline-block; }
+.detail h3.rename:hover { background: var(--panel); }
+.detail h3.rename:hover::after { content: ' ✎'; font-size: 13px; color: var(--muted); }
+.rename-input { font-size: 18px; font-weight: 600; padding: 2px 6px; margin: 0 0 2px -6px; max-width: 420px; }

@@ -73,9 +73,14 @@ needs no macOS permissions.
 
 ## Dashboard
 
-Open it from the timer (Stats) or the menu bar. It shows every previous run with its splits, estimates vs
-actuals, best times and sum of best, plus tracked time over the last 14 days, estimate accuracy and
-your streak.
+Open it from the timer (Stats) or the menu bar. It shows every session with its tasks, estimates vs
+actual times, your personal best for each task and the best possible time for the session (all your
+personal bests added up), plus tracked time over the last 14 days, estimate accuracy and your streak.
+Click a session's name to rename it.
+
+A **personal best** (gold, ★) means you finished a task faster than ever before under the same name.
+Speedrunners call each part of a run a "split" and a new personal best on one a "gold split"; that's
+where the idea comes from.
 
 ## Shortcuts
 

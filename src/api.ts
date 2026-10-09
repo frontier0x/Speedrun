@@ -35,6 +35,7 @@ export type Action =
   | { type: 'openDashboard' }
   | { type: 'hideOverlay' }
   | { type: 'dismissSummary' }
+  | { type: 'renameRun'; id: string; name: string }
   | { type: 'openSettings' }
   | { type: 'quit' };
 
