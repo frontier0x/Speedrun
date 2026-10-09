@@ -1,8 +1,8 @@
 import type { AppState, SpeedrunApi } from '../api.js';
 import { palette, paletteVars, paintSolid, resolveMode } from '../theme.js';
 import {
-  formatDuration, formatEstimate, isSection, isSectionDone, runElapsed, summarize, taskKey, totalElapsed, totalEstimate,
-  type Run, type RunSummary, type Task,
+  formatDuration, formatEstimate, isSection, isSectionDone, periodTotals, runElapsed, startOfWeek, summarize, taskKey,
+  totalElapsed, totalEstimate, type Run, type RunSummary, type Task,
 } from '../runs.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
@@ -24,18 +24,42 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 const dayKey = (d: Date) => d.toLocaleDateString('sv-SE');
 const hours = (ms: number) => (ms >= 3_600_000 ? (ms / 3_600_000).toFixed(1) + 'h' : Math.round(ms / 60_000) + 'm');
 
-function tile(value: string, label: string) {
-  const t = el('div', 'tile');
+function fact(value: string, label: string) {
+  const t = el('div', 'fact');
   t.append(el('div', 'v', value), el('div', 'k', label));
   return t;
 }
 
+/** Today and this week: the big number is time on tasks; under it, pauses and what you saved. */
+function renderPeriods() {
+  const totals = periodTotals(summaries);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const week = startOfWeek(new Date());
+  const savedSince = (from: Date) =>
+    summaries.filter((s) => new Date(s.startedAt) >= from).reduce((a, s) => a + (s.savedMs ?? 0), 0);
+  const period = (label: string, tasksMs: number, pausedMs: number, savedMs: number) => {
+    const box = el('div', 'period');
+    box.append(el('h2', '', label), el('div', 'big', formatDuration(tasksMs)));
+    const lines = el('div', 'lines');
+    const line = (value: string, text: string, cls = '') => {
+      const span = el('span');
+      span.append(el('b', cls, value), ' ' + text);
+      lines.append(span);
+    };
+    lines.append(el('span', '', 'on tasks'));
+    line(formatDuration(pausedMs), 'paused');
+    if (savedMs !== 0) line(formatDuration(Math.abs(savedMs)), savedMs > 0 ? 'saved' : 'over plan', savedMs > 0 ? 'ahead' : 'behind');
+    box.append(lines);
+    return box;
+  };
+  $('periods').replaceChildren(
+    period('Today', totals.todayMs, totals.todayPausedMs, savedSince(today)),
+    period('This week', totals.weekMs, totals.weekPausedMs, savedSince(week)),
+  );
+}
+
 function renderTiles() {
-  const now = Date.now();
-  const weekAgo = now - 7 * 86_400_000;
-  const week = summaries.filter((s) => new Date(s.startedAt).getTime() >= weekAgo);
-  const weekMs = week.reduce((a, s) => a + s.elapsedMs, 0);
-  const weekSaved = week.reduce((a, s) => a + (s.savedMs ?? 0), 0);
   const rates = summaries.map((s) => s.onEstimateRate).filter((r): r is number => r !== undefined);
   const accuracy = rates.length ? Math.round((rates.reduce((a, r) => a + r, 0) / rates.length) * 100) + '%' : '–';
 
@@ -50,43 +74,51 @@ function renderTiles() {
   }
 
   $('tiles').replaceChildren(
-    tile(hours(weekMs), 'tracked this week'),
-    tile((weekSaved < 0 ? '−' : '') + hours(Math.abs(weekSaved)), weekSaved < 0 ? 'over plan this week' : 'saved this week'),
-    tile(String(summaries.reduce((a, s) => a + s.tasksDone, 0)), 'tasks finished'),
-    tile(accuracy, 'on or under estimate'),
-    tile(String(golds.size), 'personal bests'),
-    tile(streak + (streak === 1 ? ' day' : ' days'), 'streak'),
+    fact(String(summaries.reduce((a, s) => a + s.tasksDone, 0)), 'tasks finished'),
+    fact(accuracy, 'on or under estimate'),
+    fact(String(golds.size), 'personal bests'),
+    fact(streak + (streak === 1 ? ' day' : ' days'), 'streak'),
+    fact(hours(summaries.reduce((a, s) => a + s.elapsedMs, 0)), 'on tasks, all time'),
   );
-  $('subtitle').textContent = summaries.length
-    ? `${summaries.length} session${summaries.length === 1 ? '' : 's'} since ${new Date(summaries.at(-1)!.startedAt).toLocaleDateString()}`
-    : 'Finish your first session and it shows up here.';
+  $('subtitle').textContent = summaries.length ? `${summaries.length} since ${new Date(summaries.at(-1)!.startedAt).toLocaleDateString()}` : '';
 }
 
+/** Last 14 days: time on tasks, with pauses stacked on top. */
 function renderChart() {
-  const byDay = new Map<string, number>();
+  const byDay = new Map<string, { work: number; pause: number }>();
   for (const s of summaries) {
     const k = dayKey(new Date(s.startedAt));
-    byDay.set(k, (byDay.get(k) ?? 0) + s.elapsedMs);
+    const v = byDay.get(k) ?? { work: 0, pause: 0 };
+    v.work += s.elapsedMs;
+    v.pause += s.pausedMs;
+    byDay.set(k, v);
   }
-  const days: { key: string; date: Date; ms: number }[] = [];
+  const days: { date: Date; work: number; pause: number }[] = [];
   for (let i = 13; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
-    days.push({ key: dayKey(date), date, ms: byDay.get(dayKey(date)) ?? 0 });
+    days.push({ date, ...(byDay.get(dayKey(date)) ?? { work: 0, pause: 0 }) });
   }
-  const max = Math.max(...days.map((d) => d.ms), 3_600_000);
+  const max = Math.max(...days.map((d) => d.work + d.pause), 3_600_000);
   const chart = $('chart');
   chart.replaceChildren();
   const labels = el('div', 'chart-labels');
   const tip = $('tooltip');
   days.forEach((d, i) => {
     const col = el('div', 'col' + (i === days.length - 1 ? ' today' : ''));
-    const bar = el('div', 'bar');
-    bar.style.height = (d.ms / max) * 100 + '%';
-    col.append(bar);
+    const stack = el('div', 'stack');
+    stack.style.height = ((d.work + d.pause) / max) * 100 + '%';
+    const pause = el('div', 'pause');
+    const work = el('div', 'work');
+    const total = d.work + d.pause || 1;
+    pause.style.height = (d.pause / total) * 100 + '%';
+    work.style.height = (d.work / total) * 100 + '%';
+    stack.append(pause, work);
+    col.append(stack);
     col.onmousemove = (e) => {
       tip.hidden = false;
-      tip.textContent = `${d.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}: ${d.ms ? formatDuration(d.ms) : 'nothing tracked'}`;
+      const day = d.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+      tip.textContent = d.work || d.pause ? `${day}: ${formatDuration(d.work)} on tasks, ${formatDuration(d.pause)} paused` : `${day}: nothing tracked`;
       tip.style.left = e.clientX + 12 + 'px';
       tip.style.top = e.clientY - 30 + 'px';
     };
@@ -143,8 +175,8 @@ function renderRuns() {
     const li = el('li', s.id === selected ? 'on' : '');
     const r1 = el('div', 'r1');
     const name = el('span', '', displayName(s.name));
-    if (s.id === liveRunId && !s.endedAt) name.append(' ', el('span', 'live', '● LIVE'));
-    r1.append(name, el('span', 'mono', formatDuration(s.elapsedMs)));
+    if (s.id === liveRunId && !s.endedAt) name.append(' ', el('span', 'live', '● now'));
+    r1.append(name, el('span', 't', formatDuration(s.elapsedMs)));
     const r2 = el('div', 'r2');
     r2.append(
       el('span', '', new Date(s.startedAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })),
@@ -262,6 +294,7 @@ async function load(state?: AppState) {
   runs = data.runs;
   summaries = data.summaries;
   if (!selected || !runs.some((r) => r.id === selected)) selected = runs[0]?.id ?? null;
+  renderPeriods();
   renderTiles();
   renderChart();
   renderRuns();

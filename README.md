@@ -70,14 +70,23 @@ needs no macOS permissions.
 - **Correct a time**: forgot to start or pause? Click a task's time in the list and type the right one,
   e.g. `12:30`, `1:02:03` or `25m`. A running task keeps running from there.
 
-## Dashboard
+## Stats
 
-Open it from the timer (Stats) or the menu bar. It shows every session with its tasks, estimates vs
-actual times, your personal best for each task and the best possible time for the session (all your
-personal bests added up), plus tracked time over the last 14 days, estimate accuracy and your streak.
-Click a session's name to rename it.
+Open it from the timer (Stats) or the menu bar. It looks like the timer and uses your colors.
+
+- **Today** and **This week** (since Monday): time on tasks as the big number, and under it how long you
+  paused and how much you saved or went over your plan.
+- Tasks finished, how often you're on or under your estimate, personal bests, your streak, and all your
+  time on tasks.
+- **Last 14 days**: a bar per day, time on tasks with pauses stacked on top. Hover a day for the numbers.
+- Every session with its tasks and subtasks, estimates vs actual times, your personal best for each task
+  and the best possible time for the session (all your personal bests added up). Click a session's name
+  to rename it.
 
 A **personal best** (gold, ★) means you finished a task faster than ever before under the same name.
+
+When a session ends, the timer shows what you saved, the session's facts, and today's and this week's
+time on tasks and in pauses. Type the next task right there to keep the session going, or start a new one.
 
 ## Shortcuts
 

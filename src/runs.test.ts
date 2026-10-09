@@ -4,7 +4,7 @@ import {
   addTasks, completeActive, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
   pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate, parseTimeInput, reopenTask, setElapsed,
-  addSubtask, toggleDone, ancestorsOf,
+  addSubtask, toggleDone, ancestorsOf, periodTotals, startOfWeek,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -183,4 +183,19 @@ test('ticking a group ticks all its subtasks and moves the clock on', () => {
   assert.equal(run.activeTaskId, c.id);
   toggleDone(run, build.id, 2 * MIN);
   assert.equal(a.done || b.done, false);
+});
+
+test('totals for today and this week, tasks and pauses', () => {
+  const now = new Date(2026, 9, 9, 15, 0); // Friday 9 Oct 2026, 15:00
+  assert.equal(startOfWeek(now).getDate(), 5); // Monday 5 Oct
+  const at = (day: number, h = 10) => new Date(2026, 9, day, h).toISOString();
+  const t = periodTotals(
+    [
+      { startedAt: at(9), elapsedMs: 60 * MIN, pausedMs: 10 * MIN },
+      { startedAt: at(8), elapsedMs: 30 * MIN, pausedMs: 5 * MIN },
+      { startedAt: at(4), elapsedMs: 99 * MIN, pausedMs: 9 * MIN }, // Sunday before: last week
+    ],
+    now,
+  );
+  assert.deepEqual(t, { todayMs: 60 * MIN, todayPausedMs: 10 * MIN, weekMs: 90 * MIN, weekPausedMs: 15 * MIN });
 });

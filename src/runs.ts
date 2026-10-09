@@ -503,6 +503,40 @@ export interface RunSummary {
   savedMs?: number;
 }
 
+/** Monday 00:00 of the week `d` falls in, local time. */
+export function startOfWeek(d: Date): Date {
+  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  out.setDate(out.getDate() - ((out.getDay() + 6) % 7));
+  return out;
+}
+
+export interface Totals {
+  todayMs: number;
+  todayPausedMs: number;
+  /** This calendar week, Monday to now. */
+  weekMs: number;
+  weekPausedMs: number;
+}
+
+/** Time on tasks and in pauses, today and this week. A session counts on the day it started. */
+export function periodTotals(sessions: Pick<RunSummary, 'startedAt' | 'elapsedMs' | 'pausedMs'>[], now = new Date()): Totals {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const week = startOfWeek(now).getTime();
+  const t: Totals = { todayMs: 0, todayPausedMs: 0, weekMs: 0, weekPausedMs: 0 };
+  for (const s of sessions) {
+    const at = new Date(s.startedAt).getTime();
+    if (at >= week) {
+      t.weekMs += s.elapsedMs;
+      t.weekPausedMs += s.pausedMs;
+    }
+    if (at >= today) {
+      t.todayMs += s.elapsedMs;
+      t.todayPausedMs += s.pausedMs;
+    }
+  }
+  return t;
+}
+
 export function summarize(run: Run, now = Date.now()): RunSummary {
   const leaves = run.tasks.filter((t) => !isSection(run, t));
   const estimated = leaves.filter((t) => t.done && t.estimateMs);

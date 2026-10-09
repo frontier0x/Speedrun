@@ -157,6 +157,11 @@ function renderSummary(run: Run) {
   $('factPlanned').textContent = saved ? formatDuration(saved.plannedMs) : '–';
   $('factActual').textContent = saved ? formatDuration(saved.actualMs) : '–';
   $('factTasks').textContent = `${leaves.filter((t) => t.done).length}/${leaves.length}`;
+  const t = state.totals;
+  $('todayTasks').textContent = `${formatDuration(t.todayMs)} on tasks`;
+  $('todayPaused').textContent = `${formatDuration(t.todayPausedMs)} paused`;
+  $('weekTasks').textContent = `${formatDuration(t.weekMs)} on tasks`;
+  $('weekPaused').textContent = `${formatDuration(t.weekPausedMs)} paused`;
 }
 
 // ---------- more ----------
@@ -616,8 +621,15 @@ function wire() {
     window.addEventListener('mouseup', up);
   });
   $('summaryStats').onclick = () => void api.act({ type: 'openDashboard' });
-  $('resumeSession').onclick = async () => {
+  // Typing a task on the summary keeps the session going with it.
+  $('summaryAdd').onsubmit = async (e) => {
+    e.preventDefault();
+    const input = $<HTMLInputElement>('summaryInput');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
     await api.act({ type: 'resumeSession' });
+    await api.act({ type: 'quickAdd', text });
     setOpen(true);
     $('addInput').focus();
   };

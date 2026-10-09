@@ -1,5 +1,5 @@
 // The bridge between the main process and the overlay/dashboard windows.
-import type { Run, RunSummary, Settings } from './runs.js';
+import type { Run, RunSummary, Settings, Totals } from './runs.js';
 
 export interface AppState {
   run: Run | null;
@@ -8,6 +8,8 @@ export interface AppState {
   settings: Settings;
   /** Best time per task title (see taskKey), from finished runs. */
   golds: [string, number][];
+  /** Time on tasks and in pauses, today and this week. */
+  totals: Totals;
 }
 
 export type Action =

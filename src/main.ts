@@ -6,6 +6,7 @@ import type { Action, AppState } from './api.js';
 import {
   addSubtask, addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
   parseTaskList, parseTimeInput, pause, reopenTask, setElapsed, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
+  periodTotals,
 } from './runs.js';
 import { RunStore } from './runStore.js';
 
@@ -33,7 +34,14 @@ const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, finished, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))] };
+  const sessions = [run, finished, ...pastRuns].filter((r, i, all): r is Run => Boolean(r) && all.indexOf(r) === i);
+  return {
+    run,
+    finished,
+    settings,
+    golds: [...goldSplits(pastRuns.filter((r) => r !== run))],
+    totals: periodTotals(sessions.map((r) => summarize(r))),
+  };
 }
 
 function broadcast() {

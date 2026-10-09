@@ -53,7 +53,15 @@
         <div><dt>Planned</dt><dd id="factPlanned"></dd></div>
         <div><dt>Actual</dt><dd id="factActual"></dd></div>
       </dl>
-      <button class="act primary" id="resumeSession" type="button" title="Keep this session going and add another task">Continue with next task</button>
+      <!-- Today and this week: time on tasks, and in pauses. -->
+      <dl class="period">
+        <div><dt>Today</dt><dd><span id="todayTasks"></span><small id="todayPaused"></small></dd></div>
+        <div><dt>This week</dt><dd><span id="weekTasks"></span><small id="weekPaused"></small></dd></div>
+      </dl>
+      <!-- Keep going: type the next task right here, or start over. -->
+      <form class="add" id="summaryAdd">
+        <input id="summaryInput" placeholder="Add a task to keep going, e.g. Emails 15m" autocomplete="off" />
+      </form>
       <div class="row">
         <button class="text" id="summaryStats" type="button">Stats</button>
         <span class="spacer"></span>
