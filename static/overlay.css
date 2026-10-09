@@ -29,6 +29,8 @@ html, body { height: auto; background: transparent; overflow: hidden; color: var
 .spacer { flex: 1; }
 .row { display: flex; align-items: center; gap: 14px; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--clock); outline-offset: 2px; }
+/* Text fields show focus by their caret and a soft fill, not a ring. */
+input[type=text]:focus-visible, input:not([type]):focus-visible { outline: none; }
 button { color: var(--text); }
 input, textarea { color: var(--text); background: var(--faint); border-color: transparent; }
 
@@ -53,6 +55,8 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
   width: 0; min-width: 100%; padding-right: 34px;
 }
 .task.empty { color: var(--dim); font-weight: 400; }
+/* Open, the add row right below says it already. */
+.panel.open .task.empty { display: none; }
 .task .crumb { color: var(--dim); font-weight: 400; }
 
 /* Task name with its done circle; tap the circle to finish it and show the next. */
@@ -275,7 +279,8 @@ button.text:hover { color: var(--clock); background: none; }
 .saved-label.behind { color: var(--behind); }
 .medals { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
 .medals li { display: flex; align-items: center; gap: 8px; }
-.medals .m { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--faint); }
+.medals .m { width: 14px; height: 14px; border-radius: 50%; flex: none; background: var(--dim); display: grid; place-items: center; font-size: 9px; color: var(--background); }
+.medals .m::after { content: '✓'; }
 .medals .m.gold { background: var(--gold); }
 .medals .m.silver { background: #c9ccd1; }
 .medals .m.bronze { background: #c98a5b; }
@@ -308,9 +313,7 @@ input::-webkit-calendar-picker-indicator { display: none !important; }
 .panel.open .session.group { margin-top: 6px; }
 
 /* How far under or over its estimate a task is, right by it in the list. */
-.list .est.live { font-family: var(--digits); font-variant-numeric: tabular-nums; border-color: transparent; background: var(--faint); }
-.list .est.live.ahead { color: var(--ahead); }
-.list .est.live.behind { color: var(--behind); }
+.list .est.live.behind { font-family: var(--digits); font-variant-numeric: tabular-nums; border-color: transparent; color: var(--behind); background: color-mix(in srgb, var(--behind) 14%, transparent); }
 
 /* Tabbed in: what you type becomes a subtask. */
 #addForm.indent { padding-left: 26px; }

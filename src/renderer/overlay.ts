@@ -424,10 +424,10 @@ function draggable(li: HTMLLIElement, t: Task) {
   };
 }
 
-/** Under the task's estimate while it runs: how far under (green) or over (red) it is. */
+/** While a task runs: its estimate, until it goes over; then how far over, in red. */
 function liveDelta(spent: number, est: number): { text: string; tone: string } {
   const d = spent - est;
-  return { text: formatDuration(d, { signed: true }), tone: d <= 0 ? 'ahead' : 'behind' };
+  return d <= 0 ? { text: formatEstimate(est), tone: 'ahead' } : { text: formatDuration(d, { signed: true }), tone: 'behind' };
 }
 
 /** The estimate; once the task has time on it, how far under or over it is, live. Click to change it. */
