@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
-  addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
+  addSubtask, addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
   parseTaskList, parseTimeInput, pause, reopenTask, setElapsed, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
 } from './runs.js';
 import { RunStore } from './runStore.js';
@@ -85,6 +85,19 @@ async function act(a: Action) {
       if (q) addTasks(ensureRun(), [q.task], q.urgent);
       break;
     }
+    case 'addSubtask': {
+      const q = parseQuickAdd(a.text);
+      if (run && q) addSubtask(run, a.parentId, q.task, now);
+      break;
+    }
+    case 'resumeSession':
+      // Ended too soon: the same session carries on, with its clock paused until you pick a task.
+      if (finished) {
+        run = finished;
+        run.endedAt = undefined;
+        finished = null;
+      }
+      break;
     case 'import':
       addTasks(ensureRun(), parseTaskList(a.text));
       break;

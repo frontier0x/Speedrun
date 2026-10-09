@@ -53,6 +53,34 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
   width: 0; min-width: 100%; padding-right: 34px;
 }
 .task.empty { color: var(--dim); font-weight: 400; }
+.task .crumb { color: var(--dim); font-weight: 400; }
+
+/* Task name with its done circle; tap the circle to finish it and show the next. */
+.head { display: flex; align-items: center; gap: 6px; }
+.head .task { margin-bottom: 0; flex: 1 1 0; min-width: 0; width: 0; }
+.tick {
+  width: 13px; height: 13px; flex: none; padding: 0; border-radius: 50%; border: 1.5px solid var(--dim); background: none;
+  position: relative; transition: border-color 0.15s, background 0.15s;
+}
+.tick:hover { border-color: var(--ahead); background: color-mix(in srgb, var(--ahead) 25%, transparent); }
+.tick:hover::after {
+  content: ''; position: absolute; left: 3px; top: 0.5px; width: 3px; height: 6px;
+  border: solid var(--ahead); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
+}
+
+/* The clock and its round go/pause button: green to go, red to pause. */
+.clock-row { display: flex; align-items: center; gap: 10px; }
+.go {
+  width: 30px; height: 30px; flex: none; padding: 0; border: none; border-radius: 50%; display: grid; place-items: center;
+  background: var(--ahead-fill); color: #fff; transition: transform 0.1s, filter 0.15s;
+}
+.go:hover { filter: brightness(1.1); }
+.go:active { transform: scale(0.94); }
+.go svg { width: 14px; height: 14px; fill: currentColor; }
+.go .play { margin-left: 2px; }
+.go .pause, .go.running .play { display: none; }
+.go.running { background: var(--behind-fill); }
+.go.running .pause { display: block; }
 
 /* Hide and quit, top right, only while you hover. */
 .winctl { position: absolute; top: 7px; right: 8px; display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
@@ -84,20 +112,28 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .session .behind { color: var(--behind); }
 .session .paused { color: var(--dim); }
 .session .saved { margin-left: 10px; }
+.session.group { margin-top: 4px; padding-top: 0; border-top: none; }
+.session.group .label { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- summary ---------- */
 .summary { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 4px; width: 320px; }
 .saved-label { font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+.summary > .act { padding: 8px 0; margin-bottom: 6px; }
 .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; padding-top: 10px; border-top: 1px solid var(--faint); }
 .facts dt { font-size: 11px; color: var(--dim); }
 .facts dd { margin: 2px 0 0; font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; }
 
 /* ---------- more ---------- */
 .more { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 9px; }
-.estimate-row { display: flex; align-items: baseline; gap: 10px; margin-top: -2px; }
-.estimate { padding: 3px 9px; border-radius: 999px; font-size: 12px; background: var(--faint); border: none; }
-.estimate:hover { background: var(--hover); }
-.estimate.unset { color: var(--dim); }
+.mode-row { display: flex; align-items: center; gap: 10px; margin-top: -2px; min-height: 20px; }
+/* Countdown on or off, one tap away. */
+.switch { display: flex; align-items: center; gap: 6px; padding: 0; border: none; background: none; font-size: 11px; color: var(--dim); }
+.switch:hover { color: var(--clock); }
+.switch .track { width: 22px; height: 13px; border-radius: 999px; background: var(--hover); position: relative; transition: background 0.15s; }
+.switch .knob { position: absolute; top: 2px; left: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--text); transition: transform 0.15s; }
+.switch.on { color: var(--clock); }
+.switch.on .track { background: var(--ahead); }
+.switch.on .knob { transform: translateX(9px); background: #fff; }
 .delta { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dim); }
 .delta.ahead { color: var(--ahead); }
 .delta.behind { color: var(--behind); }
@@ -114,7 +150,6 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .tips kbd { font-family: inherit; font-size: 11px; padding: 0 5px; border-radius: 4px; background: var(--faint); color: var(--clock); white-space: nowrap; }
 .tips .act { align-self: flex-start; }
 
-.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .act { padding: 6px 0; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--faint); border: none; }
 .act:hover { background: var(--hover); }
 .act.primary { background: var(--button-fill); color: var(--button-ink); }
@@ -126,8 +161,17 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .list { list-style: none; margin: 0 -8px; padding: 0; max-height: 186px; overflow-y: auto; }
 .list li { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
 .list li:hover, .list li.current { background: var(--faint); }
-.list li.section { cursor: default; color: var(--dim); font-size: 11px; padding-top: 10px; }
-.list li.section:hover { background: none; }
+/* A task with subtasks: rolled-up time, how many are done, and its estimate. */
+.list li.group { cursor: default; font-weight: 500; }
+.list li.group:hover { background: var(--faint); }
+.list .count { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.list .est.summed { border-style: dashed; }
+.list .plus { opacity: 0; color: var(--dim); background: none; border: none; padding: 0 2px; font-size: 15px; line-height: 1; }
+.list li:hover .plus { opacity: 1; }
+.list .plus:hover { color: var(--clock); }
+.list .row-sub { cursor: default; padding-top: 2px; padding-bottom: 4px; }
+.list .row-sub:hover { background: none; }
+.list .row-sub input { padding: 5px 8px; font-size: 12px; border-radius: 8px; }
 .list .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list li.current .name { color: var(--clock); font-weight: 500; }
 .list li.done .name { color: var(--dim); }

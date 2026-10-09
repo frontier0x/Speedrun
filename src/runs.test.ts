@@ -4,6 +4,7 @@ import {
   addTasks, completeActive, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
   pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate, parseTimeInput, reopenTask, setElapsed,
+  addSubtask, toggleDone, ancestorsOf,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -152,4 +153,34 @@ test('correcting a time keeps a running task running, and finished tasks can be 
   assert.equal(run.activeTaskId, a.id);
   assert.equal(totalElapsed(run, a, 11 * MIN), 7 * MIN);
   assert.equal(b.elapsedMs, 7 * MIN); // B ran from 3 to 10 before A was picked back up
+});
+
+test('subtasks roll up, take over the clock from their parent, and count the most detailed estimate', () => {
+  const run = addTasks(newRun('manual'), parseTaskList('- Build page 1h\n- Emails 10m'));
+  const [page, emails] = run.tasks;
+  startTask(run, page.id, 0);
+  addSubtask(run, page.id, parseQuickAdd('Hero 20m')!.task, 5 * MIN);
+  addSubtask(run, page.id, parseQuickAdd('Pricing 15m')!.task, 5 * MIN);
+  const [, hero, pricing] = run.tasks;
+  assert.deepEqual(run.tasks.map((t) => t.title), ['Build page', 'Hero', 'Pricing', 'Emails']);
+  assert.equal(run.activeTaskId, hero.id, 'the clock moves to the first subtask');
+  assert.deepEqual(ancestorsOf(run, pricing).map((t) => t.id), [page.id]);
+  completeActive(run, 15 * MIN); // Hero: 10m against 20m
+  assert.equal(run.activeTaskId, pricing.id);
+  completeActive(run, 35 * MIN); // Pricing: 20m against 15m
+  assert.equal(totalElapsed(run, page, 35 * MIN), 35 * MIN, 'the parent keeps its own 5m and adds its subtasks');
+  assert.equal(run.activeTaskId, emails.id);
+  // Subtask estimates count, the parent's 1h doesn't count twice: +10m, -5m.
+  assert.equal(timeSaved(run, 35 * MIN)?.savedMs, 5 * MIN);
+});
+
+test('ticking a group ticks all its subtasks and moves the clock on', () => {
+  const run = addTasks(newRun('manual'), parseTaskList('- Build\n  - A\n  - B\n- C'));
+  const [build, a, b, c] = run.tasks;
+  startTask(run, a.id, 0);
+  toggleDone(run, build.id, MIN);
+  assert.equal(a.done && b.done, true);
+  assert.equal(run.activeTaskId, c.id);
+  toggleDone(run, build.id, 2 * MIN);
+  assert.equal(a.done || b.done, false);
 });

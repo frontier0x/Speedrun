@@ -12,6 +12,8 @@ export interface AppState {
 
 export type Action =
   | { type: 'quickAdd'; text: string }
+  | { type: 'addSubtask'; parentId: string; text: string }
+  | { type: 'resumeSession' }
   | { type: 'import'; text: string }
   | { type: 'importFile' }
   | { type: 'start'; id: string }
