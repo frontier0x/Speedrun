@@ -205,8 +205,18 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .list .row-picker { padding: 2px 8px 8px 32px; }
 .list .row-picker:hover { background: none; }
 
+/* Fields elsewhere (the summary) keep their box. */
 .add input { padding: 8px 10px; font-size: 13px; border-radius: 10px; }
 .add input:focus { border-color: var(--dim); }
+/* The add field is a list row in waiting: an empty circle and the text, no box around it. */
+#addForm { display: flex; align-items: center; gap: 10px; margin: -9px -8px 0; padding: 5px 8px; border-radius: 8px; }
+/* Right under the list, like its next row; with no list above it, it keeps the normal spacing. */
+.list:empty ~ #addForm, .chips:not([hidden]) + #addForm { margin-top: 0; }
+#addForm:focus-within { background: var(--faint); }
+#addForm .box { width: 14px; height: 14px; border-radius: 50%; border: 1.5px dashed var(--dim); flex: none; opacity: 0.7; }
+#addForm:focus-within .box { border-style: solid; opacity: 1; }
+#addForm input { flex: 1; min-width: 0; padding: 0; font-size: 13px; border: none; border-radius: 0; background: none; }
+#addForm input:focus { border: none; }
 .paste { display: flex; flex-direction: column; gap: 8px; }
 .paste textarea { font-size: 12px; line-height: 1.5; resize: none; border-radius: 10px; }
 button.text { padding: 0; border: none; background: none; font-size: 12px; color: var(--dim); }
@@ -303,6 +313,11 @@ input::-webkit-calendar-picker-indicator { display: none !important; }
 .list .est.live.behind { color: var(--behind); }
 
 /* Tabbed in: what you type becomes a subtask. */
-.add.indent { padding-left: 18px; }
+#addForm.indent { padding-left: 26px; }
 
 .list li:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--dim); }
+
+/* Nothing to race: no empty row above the list. */
+.mode-row:has(> .race[hidden]) { display: none; }
+/* Countdown, at the very bottom. */
+.bottom { display: flex; margin-top: -2px; }

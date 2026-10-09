@@ -35,7 +35,7 @@ The round button next to the clock starts (green) and pauses (red) the task; it 
 is open. The circle next to the task name finishes it and shows the next one.
 
 Pausing stops both clocks and counts the pause; the summary shows how long you paused. The **Countdown**
-switch in the open panel makes the task clock count down from your estimate, then into the red with a
+switch at the bottom of the open panel makes the task clock count down from your estimate, then into the red with a
 minus. Settings has **Count pauses in the session** (off by default, so pauses don't add to the session
 time).
 
