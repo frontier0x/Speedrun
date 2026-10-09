@@ -369,9 +369,11 @@ function wire() {
   $('settingsBtn').onclick = () => void api.act({ type: 'openSettings' });
 
   // Hide to the menu bar, or quit. They sit on the face, so keep their clicks from opening it.
-  for (const id of ['minBtn', 'quitBtn']) $(id).addEventListener('mousedown', (e) => e.stopPropagation());
-  $('minBtn').onclick = () => void api.act({ type: 'hideOverlay' });
-  $('quitBtn').onclick = () => void api.act({ type: 'quit' });
+  // On the timer's task line and on the summary's title line.
+  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-win]')) {
+    b.addEventListener('mousedown', (e) => e.stopPropagation());
+    b.onclick = () => void api.act({ type: b.dataset.win === 'quit' ? 'quit' : 'hideOverlay' });
+  }
 
   // Drag the corner to resize: the whole timer scales, so it stays sharp at any size.
   $('grip').addEventListener('mousedown', (e) => {
