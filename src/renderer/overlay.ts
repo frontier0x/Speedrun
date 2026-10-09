@@ -75,6 +75,7 @@ const isOpen = () => !$('more').hidden;
 function estimatePicker(t: Task, onDone: () => void): HTMLElement {
   const box = el('div', 'picker');
   const set = (text: string) => {
+    editing = false; // the field goes away with the picker, so its blur may never come
     onDone();
     void api.act({ type: 'setEstimate', id: t.id, text });
   };
@@ -96,7 +97,10 @@ function estimatePicker(t: Task, onDone: () => void): HTMLElement {
   custom.onblur = () => (editing = false);
   custom.onkeydown = (k) => {
     if (k.key === 'Enter' && custom.value.trim()) set(custom.value);
-    if (k.key === 'Escape') onDone();
+    if (k.key === 'Escape') {
+      editing = false;
+      onDone();
+    }
   };
   box.append(custom);
   if (t.estimateMs !== undefined) {
@@ -346,6 +350,7 @@ function row(run: Run, t: Task, current: boolean, depth: number): HTMLLIElement 
       const d = t.elapsedMs - t.estimateMs;
       li.append(el('span', 'num ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
     }
+    li.append(subtaskButton(t));
     li.title = 'Click to pick this task back up';
     li.onclick = () => void api.act({ type: 'reopen', id: t.id });
   } else {

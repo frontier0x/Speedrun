@@ -70,6 +70,9 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 
 /* The clock and its round go/pause button: green to go, red to pause. */
 .clock-row { display: flex; align-items: center; gap: 10px; }
+/* Folded, the timer is just the clock: the button only shows once you open it, flush with the right edge. */
+.panel:not(.open) .go { display: none; }
+.panel.open .go { margin-left: auto; }
 .go {
   width: 30px; height: 30px; flex: none; padding: 0; border: none; border-radius: 50%; display: grid; place-items: center;
   background: var(--ahead-fill); color: #fff; transition: transform 0.1s, filter 0.15s;
@@ -204,3 +207,8 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 button.text { padding: 0; border: none; background: none; font-size: 12px; color: var(--dim); }
 button.text:hover { color: var(--clock); background: none; }
 .foot { padding-top: 2px; gap: 12px; white-space: nowrap; }
+
+/* Keep the list's columns lined up from row to row: time, then estimate or delta. */
+.list .num { min-width: 34px; text-align: right; }
+.list .est { min-width: 40px; text-align: center; }
+.list li > .num + .num { min-width: 40px; }
