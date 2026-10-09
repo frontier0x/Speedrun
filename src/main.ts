@@ -98,6 +98,21 @@ async function act(a: Action) {
         finished = null;
       }
       break;
+    case 'renameRun': {
+      // The live session renames in place; a past one is renamed on disk.
+      const name = a.name.trim();
+      if (!name) break;
+      if (run?.id === a.id) run.name = name;
+      else {
+        const past = (await runStore.list()).find((r) => r.id === a.id);
+        if (!past) break;
+        past.name = name;
+        await runStore.save(past);
+        pastRuns = pastRuns.map((r) => (r.id === a.id ? past : r));
+        if (finished?.id === a.id) finished.name = name;
+      }
+      break;
+    }
     case 'import':
       addTasks(ensureRun(), parseTaskList(a.text));
       break;
@@ -330,10 +345,10 @@ function buildMenu() {
   tray?.setContextMenu(
     Menu.buildFromTemplate([
       { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Alt+Shift+Space', click: toggleOverlay },
-      { label: 'Dashboard', click: openDashboard },
+      { label: 'Stats', click: openDashboard },
       { label: 'Settings…', click: openSettings },
       { type: 'separator' },
-      { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
+      { label: 'Done (finish task, start the next)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
       { label: 'End session', click: () => void act({ type: 'endRun' }) },
       { type: 'separator' },
       {

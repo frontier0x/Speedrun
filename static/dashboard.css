@@ -34,6 +34,10 @@ h2 { margin: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; le
 .runs .r2 { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .live { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; }
 .detail h3 { margin: 0 0 2px; font-size: 18px; }
+.detail h3.name { cursor: text; border-radius: 6px; margin-left: -6px; padding: 1px 6px; width: max-content; max-width: 100%; }
+.detail h3.name:hover { background: var(--hover); }
+.detail h3.name:hover::after { content: '  ✎'; color: var(--muted); font-size: 13px; }
+.detail .name-input { font-size: 18px; font-weight: 600; margin: 0 0 2px -6px; padding: 1px 6px; width: 100%; }
 .detail .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
 .detail .stats { display: flex; gap: 22px; margin-bottom: 14px; flex-wrap: wrap; }
 .detail .stats div .v { font-family: var(--digits); font-size: 16px; font-weight: 600; }

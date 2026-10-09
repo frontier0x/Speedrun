@@ -1,8 +1,8 @@
 # Speedrun
 
 Speedrun your day. A local-first, open-source menu-bar app that times your work the way speedrunners
-time a run: tasks are splits, sections roll up their splits, and you race your own estimates and your
-best times.
+time a run: a session is a list of tasks, tasks can have subtasks that add up, and you race your own
+estimates and your best times.
 
 ## Install
 
@@ -59,7 +59,7 @@ Click the clock to open the rest (drag it to move it):
 - **Add a task** one at a time (`Write copy 30m` sets a 30-minute estimate, a leading `!` puts it on
   top), or **Paste a list**: bullets, checkboxes, `#` headings and indentation become tasks and
   sections, and `30m`, `~30m`, `(1h)` or `[45m]` become estimates.
-- **End run** saves the run, so the next task starts a fresh one.
+- **End session** saves it and shows what you saved; the next task you add starts a fresh session.
 
 Speedrun doesn't watch your screen, read your apps or send anything anywhere. It's just a timer, and it
 needs no macOS permissions.
@@ -71,18 +71,18 @@ needs no macOS permissions.
 - **Correct a time**: forgot to start or pause? Click a task's time in the list and type the right one,
   e.g. `12:30`, `1:02:03` or `25m`. A running task keeps running from there.
 
-## Dashboard
+## Stats
 
-Open it from the timer (Stats) or the menu bar. It shows every previous run with its splits, estimates vs
-actuals, best times and sum of best, plus tracked time over the last 14 days, estimate accuracy and
-your streak.
+Open it from the timer (Stats) or the menu bar. It shows every session with its tasks and subtasks,
+estimates vs. actuals and your best time per task, plus tracked time over the last 14 days, estimate
+accuracy and your streak. Click a session's name to rename it.
 
 ## Shortcuts
 
 | Shortcut | Action |
 | --- | --- |
 | `⌘⇧Space` | Go / Pause, from any app |
-| `⌘⇧↩` | Split: finish the current task, start the next |
+| `⌘⇧↩` | Done: finish the current task, start the next |
 | `⌘⇧N` | Add a task |
 | `⌥⇧⌘Space` | Show or hide the timer |
 
@@ -99,7 +99,7 @@ npm start
 
 Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
 
-- `runs/YYYY-MM-DD/run-*.json`: your task runs
+- `runs/YYYY-MM-DD/run-*.json`: your sessions
 - `settings.json`: color, opacity and timer position
 
 ## Roadmap

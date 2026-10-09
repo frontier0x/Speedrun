@@ -54,12 +54,12 @@ function renderTiles() {
     tile((weekSaved < 0 ? '−' : '') + hours(Math.abs(weekSaved)), weekSaved < 0 ? 'over plan this week' : 'saved this week'),
     tile(String(summaries.reduce((a, s) => a + s.tasksDone, 0)), 'tasks finished'),
     tile(accuracy, 'on or under estimate'),
-    tile(String(golds.size), 'gold splits'),
+    tile(String(golds.size), 'personal bests'),
     tile(streak + (streak === 1 ? ' day' : ' days'), 'streak'),
   );
   $('subtitle').textContent = summaries.length
-    ? `${summaries.length} run${summaries.length === 1 ? '' : 's'} since ${new Date(summaries.at(-1)!.startedAt).toLocaleDateString()}`
-    : 'Finish your first run and it shows up here.';
+    ? `${summaries.length} session${summaries.length === 1 ? '' : 's'} since ${new Date(summaries.at(-1)!.startedAt).toLocaleDateString()}`
+    : 'Finish your first session and it shows up here.';
 }
 
 function renderChart() {
@@ -102,7 +102,7 @@ function renderRuns() {
   const list = $('runs');
   list.replaceChildren();
   if (!summaries.length) {
-    list.append(el('li', 'empty', 'No runs yet'));
+    list.append(el('li', 'empty', 'No sessions yet'));
     return;
   }
   for (const s of summaries) {
@@ -126,6 +126,37 @@ function renderRuns() {
   }
 }
 
+/** The session's name: click it to rename. */
+function nameField(run: Run): HTMLElement {
+  const h = el('h3', 'name', run.name);
+  h.title = 'Click to rename';
+  h.onclick = () => {
+    const input = el('input', 'name-input');
+    input.value = run.name;
+    h.replaceWith(input);
+    input.focus();
+    input.select();
+    let closed = false;
+    const finish = (save: boolean) => {
+      if (closed) return;
+      closed = true;
+      const name = input.value.trim();
+      if (save && name && name !== run.name) {
+        run.name = name;
+        void api.act({ type: 'renameRun', id: run.id, name });
+      }
+      input.replaceWith(nameField(run));
+      renderRuns();
+    };
+    input.onkeydown = (k) => {
+      if (k.key === 'Enter') finish(true);
+      if (k.key === 'Escape') finish(false);
+    };
+    input.onblur = () => finish(true);
+  };
+  return h;
+}
+
 function deltaCell(actual: number, estimate?: number) {
   const td = el('td');
   if (estimate !== undefined && actual > 0) {
@@ -141,11 +172,11 @@ function renderDetail() {
   box.replaceChildren();
   const run = runs.find((r) => r.id === selected);
   if (!run) {
-    box.append(el('div', 'empty', 'Pick a run to see its splits.'));
+    box.append(el('div', 'empty', 'Pick a session to see its tasks.'));
     return;
   }
   const s = summarize(run);
-  box.append(el('h3', '', run.name));
+  box.append(nameField(run));
   box.append(
     el('div', 'sub', new Date(run.startedAt).toLocaleString() + (run.endedAt ? ' → ' + new Date(run.endedAt).toLocaleTimeString() : ' · in progress')),
   );
@@ -166,11 +197,11 @@ function renderDetail() {
   if (s.pausedMs >= 1000) stat(formatDuration(s.pausedMs), 'paused');
   if (s.savedMs !== undefined) stat(formatDuration(Math.abs(s.savedMs)), s.savedMs >= 0 ? 'saved vs. plan' : 'over plan');
   if (s.onEstimateRate !== undefined) stat(Math.round(s.onEstimateRate * 100) + '%', 'on estimate');
-  if (sob !== undefined) stat(formatDuration(sob), 'sum of best');
+  if (sob !== undefined) stat(formatDuration(sob), 'with all your best times');
   box.append(stats);
 
   if (!run.tasks.length) {
-    box.append(el('div', 'empty', 'No tasks in this run.'));
+    box.append(el('div', 'empty', 'No tasks in this session.'));
     return;
   }
 
