@@ -19,7 +19,7 @@ your Mac by default, so the icon is always there; untick **Open at login** in it
 ## The timer
 
 A small panel floats above every app, every Space and full-screen windows. On top is a big clock,
-`0:12:34.567`, in hours, minutes, seconds and milliseconds; under it the task you're on, then the session.
+`0:12:34.567`, in hours, minutes, seconds and milliseconds; under it the task you're on with its circle. That's all, folded; the session and the rest show when you open it.
 Hover the task line for **–** (hide) and **×** (quit).
 
 The clock's color tells you how you're doing: white while it runs, green while you're under your
