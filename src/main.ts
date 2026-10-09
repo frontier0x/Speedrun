@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
   addSubtask, addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
-  parseTaskList, parseTimeInput, pause, reopenTask, setElapsed, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
+  parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, setElapsed, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
 } from './runs.js';
 import { RunStore } from './runStore.js';
 
@@ -33,7 +33,29 @@ const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, finished, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))] };
+  return { run, finished, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))], totals: totals() };
+}
+
+/** Time on tasks and in pauses today and over the last 7 days, by the day each session started. */
+function totals(now = Date.now()): AppState['totals'] {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const weekStart = today.getTime() - 6 * 86_400_000;
+  const all = [run, finished, ...pastRuns].filter((r, i, a): r is Run => !!r && a.findIndex((x) => x?.id === r.id) === i);
+  const t = { todayMs: 0, todayPausedMs: 0, weekMs: 0, weekPausedMs: 0 };
+  for (const r of all) {
+    const started = new Date(r.startedAt).getTime();
+    if (started < weekStart) continue;
+    const ms = runElapsed(r, now);
+    const paused = pausedTotal(r, now);
+    t.weekMs += ms;
+    t.weekPausedMs += paused;
+    if (started >= today.getTime()) {
+      t.todayMs += ms;
+      t.todayPausedMs += paused;
+    }
+  }
+  return t;
 }
 
 function broadcast() {

@@ -157,6 +157,9 @@ function renderSummary(run: Run) {
   $('factPlanned').textContent = saved ? formatDuration(saved.plannedMs) : '–';
   $('factActual').textContent = saved ? formatDuration(saved.actualMs) : '–';
   $('factTasks').textContent = `${leaves.filter((t) => t.done).length}/${leaves.length}`;
+  const tot = state.totals;
+  $('totToday').textContent = `${formatDuration(tot.todayMs)} · ${formatDuration(tot.todayPausedMs)} paused`;
+  $('totWeek').textContent = `${formatDuration(tot.weekMs)} · ${formatDuration(tot.weekPausedMs)} paused`;
 }
 
 // ---------- more ----------

@@ -8,6 +8,8 @@ export interface AppState {
   settings: Settings;
   /** Best time per task title (see taskKey), from finished runs. */
   golds: [string, number][];
+  /** Time on tasks and in pauses across all sessions, today and over the last 7 days. */
+  totals: { todayMs: number; todayPausedMs: number; weekMs: number; weekPausedMs: number };
 }
 
 export type Action =
