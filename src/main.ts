@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
   addSubtask, addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
-  parseTaskList, parseTimeInput, pause, reopenTask, setElapsed, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
+  parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, setElapsed, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
 } from './runs.js';
 import { RunStore } from './runStore.js';
 
@@ -33,7 +33,29 @@ const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, finished, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))] };
+  return { run, finished, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))], totals: totals() };
+}
+
+/** Time on tasks and in pauses today and over the last 7 days, by the day each session started. */
+function totals(now = Date.now()): AppState['totals'] {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const weekStart = today.getTime() - 6 * 86_400_000;
+  const all = [run, finished, ...pastRuns].filter((r, i, a): r is Run => !!r && a.findIndex((x) => x?.id === r.id) === i);
+  const t = { todayMs: 0, todayPausedMs: 0, weekMs: 0, weekPausedMs: 0 };
+  for (const r of all) {
+    const started = new Date(r.startedAt).getTime();
+    if (started < weekStart) continue;
+    const ms = runElapsed(r, now);
+    const paused = pausedTotal(r, now);
+    t.weekMs += ms;
+    t.weekPausedMs += paused;
+    if (started >= today.getTime()) {
+      t.todayMs += ms;
+      t.todayPausedMs += paused;
+    }
+  }
+  return t;
 }
 
 function broadcast() {
@@ -98,6 +120,34 @@ async function act(a: Action) {
         finished = null;
       }
       break;
+    case 'continueWith': {
+      // From the summary: the session carries on with a new task, on the clock right away.
+      const q = parseQuickAdd(a.text);
+      if (!q) break;
+      if (finished) {
+        run = finished;
+        run.endedAt = undefined;
+        finished = null;
+      }
+      addTasks(ensureRun(), [q.task]);
+      startTask(run!, q.task.id, now);
+      break;
+    }
+    case 'renameRun': {
+      // The live session renames in place; a past one is renamed on disk.
+      const name = a.name.trim();
+      if (!name) break;
+      if (run?.id === a.id) run.name = name;
+      else {
+        const past = (await runStore.list()).find((r) => r.id === a.id);
+        if (!past) break;
+        past.name = name;
+        await runStore.save(past);
+        pastRuns = pastRuns.map((r) => (r.id === a.id ? past : r));
+        if (finished?.id === a.id) finished.name = name;
+      }
+      break;
+    }
     case 'import':
       addTasks(ensureRun(), parseTaskList(a.text));
       break;
@@ -269,11 +319,11 @@ function openDashboard() {
     return;
   }
   dashboard = new BrowserWindow({
-    width: 1100,
-    height: 760,
-    minWidth: 760,
-    minHeight: 520,
-    title: 'Speedrun',
+    width: 480,
+    height: 780,
+    minWidth: 380,
+    minHeight: 480,
+    title: 'Speedrun Stats',
     titleBarStyle: 'hiddenInset',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#fbfbf8',
     webPreferences: { preload, contextIsolation: true, sandbox: true },
@@ -330,10 +380,10 @@ function buildMenu() {
   tray?.setContextMenu(
     Menu.buildFromTemplate([
       { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Alt+Shift+Space', click: toggleOverlay },
-      { label: 'Dashboard', click: openDashboard },
+      { label: 'Stats', click: openDashboard },
       { label: 'Settings…', click: openSettings },
       { type: 'separator' },
-      { label: 'Split (finish current task)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
+      { label: 'Done (finish task, start the next)', accelerator: 'CommandOrControl+Shift+Return', click: () => void act({ type: 'split' }) },
       { label: 'End session', click: () => void act({ type: 'endRun' }) },
       { type: 'separator' },
       {
@@ -360,6 +410,13 @@ app.whenReady().then(async () => {
   // No Dock icon, so the panel can float over full-screen apps; the menu bar icon is the way in.
   app.dock?.hide();
   settings = await runStore.loadSettings();
+  // Installed means it's in the menu bar: start at login, once, by default. The menu bar icon's
+  // "Open at login" turns it off again.
+  if (!settings.loginItemSet && app.isPackaged) {
+    app.setLoginItemSettings({ openAtLogin: true });
+    settings = { ...settings, loginItemSet: true };
+    persistSettings();
+  }
   settings.scale = clampScale(settings.scale);
   nativeTheme.themeSource = settings.theme;
   pastRuns = await runStore.list();

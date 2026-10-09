@@ -1,7 +1,7 @@
 import type { AppState, SpeedrunApi } from '../api.js';
 import { palette, paletteVars, paintSolid, resolveMode } from '../theme.js';
 import {
-  formatDuration, formatEstimate, isSection, isSectionDone, runElapsed, summarize, taskKey, totalElapsed, totalEstimate,
+  childrenOf, formatDuration, formatEstimate, isSection, isSectionDone, summarize, taskKey, totalElapsed, totalEstimate,
   type Run, type RunSummary, type Task,
 } from '../runs.js';
 
@@ -11,8 +11,9 @@ const $ = (id: string) => document.getElementById(id)!;
 let runs: Run[] = [];
 let summaries: RunSummary[] = [];
 let golds = new Map<string, number>();
-let selected: string | null = null;
+let open: string | null = null; // session shown with its tasks
 let liveRunId: string | null = null;
+let period: 'today' | 'week' = 'today';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -22,190 +23,220 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 }
 
 const dayKey = (d: Date) => d.toLocaleDateString('sv-SE');
-const hours = (ms: number) => (ms >= 3_600_000 ? (ms / 3_600_000).toFixed(1) + 'h' : Math.round(ms / 60_000) + 'm');
-
-function tile(value: string, label: string) {
-  const t = el('div', 'tile');
-  t.append(el('div', 'v', value), el('div', 'k', label));
-  return t;
+const startOfDay = (daysAgo: number) => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - daysAgo);
+  return d;
+};
+/** h:mm:ss, like the timer. */
+function hms(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${Math.floor(s / 3600)}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
 }
+/** Short, for under the bars: 45m, 2.5h. */
+const short = (ms: number) => (ms >= 3_600_000 ? (ms / 3_600_000).toFixed(1).replace(/\.0$/, '') + 'h' : Math.round(ms / 60_000) + 'm');
 
-function renderTiles() {
-  const now = Date.now();
-  const weekAgo = now - 7 * 86_400_000;
-  const week = summaries.filter((s) => new Date(s.startedAt).getTime() >= weekAgo);
-  const weekMs = week.reduce((a, s) => a + s.elapsedMs, 0);
-  const weekSaved = week.reduce((a, s) => a + (s.savedMs ?? 0), 0);
-  const rates = summaries.map((s) => s.onEstimateRate).filter((r): r is number => r !== undefined);
-  const accuracy = rates.length ? Math.round((rates.reduce((a, r) => a + r, 0) / rates.length) * 100) + '%' : '–';
+// ---------- overview ----------
 
-  // Streak: consecutive days, ending today or yesterday, with at least one finished task.
-  const activeDays = new Set(summaries.filter((s) => s.tasksDone > 0).map((s) => dayKey(new Date(s.startedAt))));
+function renderOverview() {
+  for (const b of $('period').querySelectorAll<HTMLButtonElement>('button')) {
+    b.classList.toggle('on', b.dataset.v === period);
+    b.onclick = () => {
+      period = b.dataset.v as typeof period;
+      renderOverview();
+    };
+  }
+  const since = startOfDay(period === 'today' ? 0 : 6).getTime();
+  const inPeriod = summaries.filter((s) => new Date(s.startedAt).getTime() >= since);
+  const taskMs = inPeriod.reduce((a, s) => a + s.elapsedMs, 0);
+  const pauseMs = inPeriod.reduce((a, s) => a + s.pausedMs, 0);
+  const planned = inPeriod.filter((s) => s.savedMs !== undefined);
+  const saved = planned.reduce((a, s) => a + s.savedMs!, 0);
+
+  $('taskTime').textContent = hms(taskMs);
+  $('caption').textContent = period === 'today' ? 'on tasks today' : 'on tasks in the last 7 days';
+  $('pauseTime').textContent = hms(pauseMs);
+  const savedEl = $('savedTime');
+  savedEl.textContent = planned.length ? `${hms(Math.abs(saved))} ${saved >= 0 ? 'saved' : 'over'}` : '–';
+  savedEl.className = 'num ' + (!planned.length ? '' : saved >= 0 ? 'ahead' : 'behind');
+  $('tasksDone').textContent = String(inPeriod.reduce((a, s) => a + s.tasksDone, 0));
+
+  // Streak: days in a row, up to today or yesterday, with at least one task done.
+  const active = new Set(summaries.filter((s) => s.tasksDone > 0).map((s) => dayKey(new Date(s.startedAt))));
   let streak = 0;
   const d = new Date();
-  if (!activeDays.has(dayKey(d))) d.setDate(d.getDate() - 1);
-  while (activeDays.has(dayKey(d))) {
+  if (!active.has(dayKey(d))) d.setDate(d.getDate() - 1);
+  while (active.has(dayKey(d))) {
     streak++;
     d.setDate(d.getDate() - 1);
   }
-
-  $('tiles').replaceChildren(
-    tile(hours(weekMs), 'tracked this week'),
-    tile((weekSaved < 0 ? '−' : '') + hours(Math.abs(weekSaved)), weekSaved < 0 ? 'over plan this week' : 'saved this week'),
-    tile(String(summaries.reduce((a, s) => a + s.tasksDone, 0)), 'tasks finished'),
-    tile(accuracy, 'on or under estimate'),
-    tile(String(golds.size), 'gold splits'),
-    tile(streak + (streak === 1 ? ' day' : ' days'), 'streak'),
-  );
-  $('subtitle').textContent = summaries.length
-    ? `${summaries.length} run${summaries.length === 1 ? '' : 's'} since ${new Date(summaries.at(-1)!.startedAt).toLocaleDateString()}`
-    : 'Finish your first run and it shows up here.';
+  $('streak').textContent = streak + (streak === 1 ? ' day' : ' days');
 }
+
+// ---------- last 7 days ----------
 
 function renderChart() {
-  const byDay = new Map<string, number>();
-  for (const s of summaries) {
-    const k = dayKey(new Date(s.startedAt));
-    byDay.set(k, (byDay.get(k) ?? 0) + s.elapsedMs);
-  }
-  const days: { key: string; date: Date; ms: number }[] = [];
-  for (let i = 13; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    days.push({ key: dayKey(date), date, ms: byDay.get(dayKey(date)) ?? 0 });
-  }
-  const max = Math.max(...days.map((d) => d.ms), 3_600_000);
-  const chart = $('chart');
-  chart.replaceChildren();
-  const labels = el('div', 'chart-labels');
-  const tip = $('tooltip');
-  days.forEach((d, i) => {
-    const col = el('div', 'col' + (i === days.length - 1 ? ' today' : ''));
-    const bar = el('div', 'bar');
-    bar.style.height = (d.ms / max) * 100 + '%';
-    col.append(bar);
-    col.onmousemove = (e) => {
-      tip.hidden = false;
-      tip.textContent = `${d.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}: ${d.ms ? formatDuration(d.ms) : 'nothing tracked'}`;
-      tip.style.left = e.clientX + 12 + 'px';
-      tip.style.top = e.clientY - 30 + 'px';
-    };
-    col.onmouseleave = () => (tip.hidden = true);
-    chart.append(col);
-    labels.append(el('span', '', i % 2 === 1 || i === days.length - 1 ? d.date.toLocaleDateString([], { day: 'numeric', month: 'numeric' }) : ''));
+  const days = [6, 5, 4, 3, 2, 1, 0].map((ago) => {
+    const date = startOfDay(ago);
+    const of = summaries.filter((s) => dayKey(new Date(s.startedAt)) === dayKey(date));
+    return { date, ago, task: of.reduce((a, s) => a + s.elapsedMs, 0), pause: of.reduce((a, s) => a + s.pausedMs, 0) };
   });
-  chart.after(labels);
-  document.querySelectorAll('.chart-labels').forEach((n, i, all) => i < all.length - 1 && n.remove());
+  const max = Math.max(...days.map((d) => d.task + d.pause), 3_600_000);
+  const tip = $('tooltip');
+  $('chart').replaceChildren(
+    ...days.map((d) => {
+      const day = el('div', 'day' + (d.ago === 0 ? ' today' : ''));
+      const bars = el('div', 'bars');
+      if (d.pause) {
+        const p = el('i', 'pause');
+        p.style.height = (d.pause / max) * 100 + '%';
+        bars.append(p);
+      }
+      if (d.task) {
+        const t = el('i', 'task');
+        t.style.height = (d.task / max) * 100 + '%';
+        bars.append(t);
+      }
+      day.append(bars, el('span', 'val', d.task ? short(d.task) : '–'), el('span', 'name', d.ago === 0 ? 'Today' : d.date.toLocaleDateString([], { weekday: 'short' })));
+      day.onmousemove = (e) => {
+        tip.hidden = false;
+        tip.textContent = `${d.date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' })}: ${hms(d.task)} on tasks, ${hms(d.pause)} paused`;
+        tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + 'px';
+        tip.style.top = e.clientY - 34 + 'px';
+      };
+      day.onmouseleave = () => (tip.hidden = true);
+      return day;
+    }),
+  );
 }
 
-function renderRuns() {
-  const list = $('runs');
+// ---------- sessions ----------
+
+function renderSessions() {
+  const list = $('sessions');
   list.replaceChildren();
   if (!summaries.length) {
-    list.append(el('li', 'empty', 'No runs yet'));
+    list.append(el('li', 'empty', 'Finish your first task and its session shows up here.'));
     return;
   }
   for (const s of summaries) {
-    const li = el('li', s.id === selected ? 'on' : '');
-    const r1 = el('div', 'r1');
-    const name = el('span', '', s.name);
-    if (s.id === liveRunId && !s.endedAt) name.append(' ', el('span', 'live', '● LIVE'));
-    r1.append(name, el('span', 'mono', formatDuration(s.elapsedMs)));
-    const r2 = el('div', 'r2');
-    r2.append(
-      el('span', '', new Date(s.startedAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })),
-      el('span', '', `${s.tasksDone}/${s.tasksTotal} tasks`),
+    const li = el('li', s.id === open ? 'on' : '');
+    const row = el('div', 'row');
+    const run = runs.find((r) => r.id === s.id);
+    // Open, its name is the place to rename it.
+    const title = s.id === open && run ? nameField(run) : el('span', 'title', s.name);
+    if (s.id === liveRunId && !s.endedAt) title.append(el('span', 'live', '● NOW'));
+    row.append(
+      title,
+      el('span', 'when', new Date(s.startedAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })),
+      el('span', 'count', `${s.tasksDone}/${s.tasksTotal}`),
+      el('span', 'num', hms(s.elapsedMs)),
     );
-    li.append(r1, r2);
-    li.onclick = () => {
-      selected = s.id;
-      renderRuns();
-      renderDetail();
+    row.onclick = () => {
+      open = open === s.id ? null : s.id;
+      renderSessions();
     };
+    li.append(row);
+    if (s.id === open && run) li.append(detail(run));
     list.append(li);
   }
 }
 
-function deltaCell(actual: number, estimate?: number) {
-  const td = el('td');
-  if (estimate !== undefined && actual > 0) {
-    const d = actual - estimate;
-    td.textContent = formatDuration(d, { signed: true });
-    td.className = d <= 0 ? 'ahead' : 'behind';
-  }
-  return td;
-}
-
-function renderDetail() {
-  const box = $('detail');
-  box.replaceChildren();
-  const run = runs.find((r) => r.id === selected);
-  if (!run) {
-    box.append(el('div', 'empty', 'Pick a run to see its splits.'));
-    return;
-  }
+function detail(run: Run): HTMLElement {
+  const box = el('div', 'detail');
   const s = summarize(run);
-  box.append(el('h3', '', run.name));
-  box.append(
-    el('div', 'sub', new Date(run.startedAt).toLocaleString() + (run.endedAt ? ' → ' + new Date(run.endedAt).toLocaleTimeString() : ' · in progress')),
-  );
-
-  // Sum of best: what this run would take if every task matched your best ever time.
-  const leaves = run.tasks.filter((t) => !isSection(run, t));
-  const sob = leaves.every((t) => golds.has(taskKey(t.title))) && leaves.length ? leaves.reduce((a, t) => a + golds.get(taskKey(t.title))!, 0) : undefined;
-
-  const stats = el('div', 'stats');
-  const stat = (v: string, k: string) => {
+  const facts = el('dl', 'facts');
+  const fact = (k: string, v: string, cls = '') => {
     const d = el('div');
-    d.append(el('div', 'v', v), el('div', 'k', k));
-    stats.append(d);
+    d.append(el('dt', '', k), el('dd', cls, v));
+    facts.append(d);
   };
-  stat(formatDuration(runElapsed(run)), 'total time');
-  if (s.estimateMs !== undefined) stat(formatEstimate(s.estimateMs), 'estimated');
-  stat(`${s.tasksDone}/${s.tasksTotal}`, 'tasks done');
-  if (s.pausedMs >= 1000) stat(formatDuration(s.pausedMs), 'paused');
-  if (s.savedMs !== undefined) stat(formatDuration(Math.abs(s.savedMs)), s.savedMs >= 0 ? 'saved vs. plan' : 'over plan');
-  if (s.onEstimateRate !== undefined) stat(Math.round(s.onEstimateRate * 100) + '%', 'on estimate');
-  if (sob !== undefined) stat(formatDuration(sob), 'sum of best');
-  box.append(stats);
+  fact('On tasks', hms(s.elapsedMs));
+  fact('Pauses', hms(s.pausedMs));
+  fact('Tasks', `${s.tasksDone}/${s.tasksTotal}`);
+  if (s.estimateMs !== undefined) fact('Planned', formatEstimate(s.estimateMs));
+  if (s.savedMs !== undefined) fact(s.savedMs >= 0 ? 'Saved' : 'Over', hms(Math.abs(s.savedMs)), s.savedMs >= 0 ? 'ahead' : 'behind');
+  if (s.onEstimateRate !== undefined) fact('On estimate', Math.round(s.onEstimateRate * 100) + '%');
+  box.append(facts);
 
-  if (!run.tasks.length) {
-    box.append(el('div', 'empty', 'No tasks in this run.'));
-    return;
-  }
-
-  const table = el('table');
-  const head = el('tr');
-  for (const h of ['Task', 'Estimate', 'Time', '+/−', 'Best']) head.append(el('th', '', h));
-  table.append(head);
-  for (const t of run.tasks) table.append(taskRow(run, t));
-  box.append(table);
+  const tasks = el('ol', 'tasks');
+  const add = (list: Task[], depth: number) => {
+    for (const t of list) {
+      tasks.append(taskRow(run, t, depth));
+      add(childrenOf(run, t.id), depth + 1);
+    }
+  };
+  add(run.tasks.filter((t) => !t.parentId || !run.tasks.some((p) => p.id === t.parentId)), 0);
+  if (run.tasks.length) box.append(tasks);
+  return box;
 }
 
-function taskRow(run: Run, t: Task) {
-  const section = isSection(run, t);
-  const tr = el('tr', section ? 'section' : t.done ? '' : 'open');
-  let depth = 0;
-  for (let p = t.parentId; p; p = run.tasks.find((x) => x.id === p)?.parentId) depth++;
-  const name = el('td', '', (t.done && !section ? '✓ ' : '') + t.title);
-  name.style.paddingLeft = 8 + depth * 16 + 'px';
-  const est = section ? totalEstimate(run, t) : t.estimateMs;
+/** A task like in the timer's list: circle, name, time, and how far under or over its estimate. */
+function taskRow(run: Run, t: Task, depth: number): HTMLLIElement {
+  const group = isSection(run, t);
+  const done = group ? isSectionDone(run, t) : t.done;
+  const li = el('li', (group ? 'group ' : '') + (done ? 'done' : 'open'));
+  li.style.paddingLeft = depth * 18 + 'px';
   const time = totalElapsed(run, t);
-  const best = section ? undefined : golds.get(taskKey(t.title));
-  const timeCell = el('td', section ? 'mono-cell' : '', time ? formatDuration(time) : '');
-  const bestCell = el('td', 'muted', best !== undefined ? formatDuration(best) : '');
-  if (best !== undefined && t.done && t.elapsedMs <= best) {
-    timeCell.classList.add('gold');
-    timeCell.textContent += ' ★';
-  }
-  tr.append(name, el('td', 'muted' + (section ? ' mono-cell' : ''), est !== undefined ? formatEstimate(est) : ''), timeCell, deltaCell(time, (section ? isSectionDone(run, t) : t.done) ? est : undefined), bestCell);
-  return tr;
+  const est = group ? totalEstimate(run, t) : t.estimateMs;
+  const best = group ? undefined : golds.get(taskKey(t.title));
+  const personalBest = best !== undefined && t.done && t.elapsedMs <= best;
+  li.append(el('span', 'box', '✓'), el('span', 't', t.title));
+  const timeCell = el('span', 'num' + (personalBest ? ' gold' : ''), time ? formatDuration(time) + (personalBest ? ' ★' : '') : '');
+  if (personalBest) timeCell.title = 'Your best time for this task';
+  li.append(timeCell);
+  const delta = el('span', 'num');
+  if (done && est !== undefined && time > 0) {
+    const d = time - est;
+    delta.textContent = formatDuration(d, { signed: true });
+    delta.className = 'num ' + (d <= 0 ? 'ahead' : 'behind');
+  } else if (est !== undefined) delta.textContent = formatEstimate(est);
+  li.append(delta);
+  return li;
 }
+
+/** The session's name: click it to rename. */
+function nameField(run: Run): HTMLElement {
+  const h = el('span', 'name', run.name);
+  h.title = 'Click to rename';
+  h.onclick = (e) => {
+    e.stopPropagation();
+    const input = el('input', 'name-input');
+    input.value = run.name;
+    h.replaceWith(input);
+    input.focus();
+    input.select();
+    let closed = false;
+    const finish = (save: boolean) => {
+      if (closed) return;
+      closed = true;
+      const name = input.value.trim();
+      if (save && name && name !== run.name) {
+        run.name = name;
+        const s = summaries.find((x) => x.id === run.id);
+        if (s) s.name = name;
+        void api.act({ type: 'renameRun', id: run.id, name });
+      }
+      renderSessions();
+    };
+    input.onclick = (k) => k.stopPropagation();
+    input.onkeydown = (k) => {
+      if (k.key === 'Enter') finish(true);
+      if (k.key === 'Escape') finish(false);
+    };
+    input.onblur = () => finish(true);
+  };
+  return h;
+}
+
+// ---------- theme & data ----------
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 let lastState: AppState | undefined;
 
-/** The dashboard wears the timer's colors: day or night, your palette. */
+/** Stats wears the timer's colors: day or night, your palette. */
 function applyTheme(s: AppState) {
   lastState = s;
   const mode = resolveMode(s.settings.theme, darkQuery.matches);
@@ -214,10 +245,14 @@ function applyTheme(s: AppState) {
   for (const [k, v] of Object.entries(paletteVars(colors))) root.setProperty(k, v);
   // A window needs a solid base under a see-through or gradient background.
   root.setProperty('--bg-solid', paintSolid(colors.background).slice(0, 7));
-  root.setProperty('--accent', paintSolid(colors.clock));
+  const n = parseInt(paintSolid(colors.button).slice(1, 7), 16);
+  root.setProperty('--button-ink', 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 150 ? '#000' : '#fff');
+  root.setProperty('--clock-weight', String(s.settings.clockWeight));
   root.colorScheme = mode;
 }
 darkQuery.addEventListener('change', () => lastState && applyTheme(lastState));
+
+let editingName = () => document.activeElement?.classList.contains('name-input') ?? false;
 
 async function load(state?: AppState) {
   const s = state ?? (await api.getState());
@@ -227,11 +262,9 @@ async function load(state?: AppState) {
   const data = await api.listRuns();
   runs = data.runs;
   summaries = data.summaries;
-  if (!selected || !runs.some((r) => r.id === selected)) selected = runs[0]?.id ?? null;
-  renderTiles();
+  renderOverview();
   renderChart();
-  renderRuns();
-  renderDetail();
+  if (!editingName()) renderSessions();
 }
 
 let pending: ReturnType<typeof setTimeout> | undefined;

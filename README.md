@@ -1,8 +1,8 @@
 # Speedrun
 
 Speedrun your day. A local-first, open-source menu-bar app that times your work the way speedrunners
-time a run: tasks are splits, sections roll up their splits, and you race your own estimates and your
-best times.
+time a run: a session is a list of tasks, tasks can have subtasks that add up, and you race your own
+estimates and your best times.
 
 ## Install
 
@@ -13,8 +13,8 @@ best times.
    **Done**, then go to System Settings › Privacy & Security, scroll down and click **Open Anyway**.
    Or run `xattr -dr com.apple.quarantine /Applications/Speedrun.app` once. After that it opens normally.
 
-Speedrun shows a stopwatch icon in the menu bar and the floating timer bar (no Dock icon). Tick **Open at login** in the
-menu bar menu to have it start with your Mac.
+Speedrun shows a stopwatch icon in the menu bar and the floating timer bar (no Dock icon). It starts with
+your Mac by default, so the icon is always there; untick **Open at login** in its menu to stop that.
 
 ## The timer
 
@@ -27,7 +27,7 @@ estimate, red once you're over, grey while paused.
 Under it sits the **session clock**: all the time you've spent on this session's tasks. It is green while
 you're on or under your plan and red once you're behind, with the time saved or lost next to it. When you
 finish the last task or click End session, the panel shows the total time you saved (or lost) against
-your estimates. **Continue with next task** keeps the same session going so you can add another task;
+your estimates. Type another task right there to keep the same session going (its clock starts at once);
 Start a new session starts a fresh list.
 
 The round button next to the clock starts (green) and pauses (red) the task, and stays there when the
@@ -59,7 +59,7 @@ Click the clock to open the rest (drag it to move it):
 - **Add a task** one at a time (`Write copy 30m` sets a 30-minute estimate, a leading `!` puts it on
   top), or **Paste a list**: bullets, checkboxes, `#` headings and indentation become tasks and
   sections, and `30m`, `~30m`, `(1h)` or `[45m]` become estimates.
-- **End run** saves the run, so the next task starts a fresh one.
+- **End session** saves it and shows what you saved; the next task you add starts a fresh session.
 
 Speedrun doesn't watch your screen, read your apps or send anything anywhere. It's just a timer, and it
 needs no macOS permissions.
@@ -71,18 +71,19 @@ needs no macOS permissions.
 - **Correct a time**: forgot to start or pause? Click a task's time in the list and type the right one,
   e.g. `12:30`, `1:02:03` or `25m`. A running task keeps running from there.
 
-## Dashboard
+## Stats
 
-Open it from the timer (Stats) or the menu bar. It shows every previous run with its splits, estimates vs
-actuals, best times and sum of best, plus tracked time over the last 14 days, estimate accuracy and
-your streak.
+Open it from the timer (Stats) or the menu bar. It looks like the timer and shows time on tasks today
+or this week, time spent in pauses, time saved or lost against your plan, tasks done and your streak,
+plus each of the last 7 days with tasks and pauses stacked. Below that are your sessions: click one to
+see its tasks and subtasks with times and estimates, and click its name to rename it.
 
 ## Shortcuts
 
 | Shortcut | Action |
 | --- | --- |
 | `⌘⇧Space` | Go / Pause, from any app |
-| `⌘⇧↩` | Split: finish the current task, start the next |
+| `⌘⇧↩` | Done: finish the current task, start the next |
 | `⌘⇧N` | Add a task |
 | `⌥⇧⌘Space` | Show or hide the timer |
 
@@ -99,7 +100,7 @@ npm start
 
 Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
 
-- `runs/YYYY-MM-DD/run-*.json`: your task runs
+- `runs/YYYY-MM-DD/run-*.json`: your sessions
 - `settings.json`: color, opacity and timer position
 
 ## Roadmap

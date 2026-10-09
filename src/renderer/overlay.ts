@@ -157,6 +157,9 @@ function renderSummary(run: Run) {
   $('factPlanned').textContent = saved ? formatDuration(saved.plannedMs) : '–';
   $('factActual').textContent = saved ? formatDuration(saved.actualMs) : '–';
   $('factTasks').textContent = `${leaves.filter((t) => t.done).length}/${leaves.length}`;
+  const tot = state.totals;
+  $('totToday').textContent = `${formatDuration(tot.todayMs)} · ${formatDuration(tot.todayPausedMs)} paused`;
+  $('totWeek').textContent = `${formatDuration(tot.weekMs)} · ${formatDuration(tot.weekPausedMs)} paused`;
 }
 
 // ---------- more ----------
@@ -498,6 +501,7 @@ function render() {
   if (fin) {
     $('more').hidden = true;
     renderSummary(fin);
+    if (document.activeElement?.id !== 'continueInput') $('continueInput').focus();
     return;
   }
   renderFace();
@@ -616,10 +620,14 @@ function wire() {
     window.addEventListener('mouseup', up);
   });
   $('summaryStats').onclick = () => void api.act({ type: 'openDashboard' });
-  $('resumeSession').onclick = async () => {
-    await api.act({ type: 'resumeSession' });
+  $('continueForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const input = $<HTMLInputElement>('continueInput');
+    if (!input.value.trim()) return;
+    const text = input.value;
+    input.value = '';
+    await api.act({ type: 'continueWith', text });
     setOpen(true);
-    $('addInput').focus();
   };
   $('newSession').onclick = async () => {
     await api.act({ type: 'dismissSummary' });
