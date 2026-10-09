@@ -28,10 +28,10 @@ Under it sits the **session clock**: all the time you've spent on this session's
 you're on or under your plan and red once you're behind, with the time saved or lost next to it. When you
 finish the last task or click End session, the panel shows the total time you saved (or lost) against
 your estimates. Type another task right there to keep the same session going (its clock starts at once);
-Start a new session starts a fresh list.
+New session starts a fresh list.
 
-The round button next to the clock starts (green) and pauses (red) the task, and stays there when the
-timer is folded. The circle next to the task name finishes it and shows the next one.
+The round button next to the clock starts (green) and pauses (red) the task; it shows when the timer
+is open. The circle next to the task name finishes it and shows the next one.
 
 Pausing stops both clocks and counts the pause; the summary shows how long you paused. The **Countdown**
 switch in the open panel makes the task clock count down from your estimate, then into the red with a
@@ -63,6 +63,28 @@ Click the clock to open the rest (drag it to move it):
 
 Speedrun doesn't watch your screen, read your apps or send anything anywhere. It's just a timer, and it
 needs no macOS permissions.
+
+## Racing
+
+- **Templates**: at the end of a session, click **Save as template** and name it ("Morning routine"), or
+  paste a list and click **Save as template**. With an empty list, your templates show as buttons above
+  the add field; the menu bar icon has **Start template** too. Stats lists them with your best run, what's
+  possible (your best time for every task, added up) and the tasks to edit as text.
+- **Reset**: in a session from a template, the round arrow next to the play button (click twice) throws a
+  bad attempt away and starts the route again from 0:00. The attempt counts in your daily totals, never
+  against your best.
+- **Race your best** (Settings › Timer, off by default): each task runs against your best time for it. In a
+  template that's the same task of your earlier runs, even renamed. Otherwise it's a task with the same or a
+  similar name, ignoring dates, numbers, weekdays and estimates ("Emails 9.10." is "emails"), worked out on
+  your Mac with no AI. The clock turns green or red against that best, the open timer shows `Best 3:00 · 0:59
+  left` and, in a template, how you're doing against your fastest run. Click a similar-name match to say it's
+  not the same task. As you type a task, Speedrun suggests names you've used before, so they match.
+- **Finishing**: ticking a task off shows its result for a moment where the task name is, in gold with a
+  shine for a new best. A template run all the way through ends with your time, **★ NEW PB**, where it ranks
+  among your attempts, and a medal per task: gold for a new best, silver under the estimate, bronze up to
+  10 % over. **Copy** puts the result on the clipboard as a picture.
+- **3, 2, 1, Go** before the first task of a session, short **sounds** (with a volume) and a bold italic
+  **Speedrun** clock style (Settings › Look) round it off. Each can be switched off.
 
 ## Fixing things up
 

@@ -4,6 +4,7 @@ import {
   COLOR_LABELS, DEFAULT_COLORS, PRESETS, normalizeHex, paintSolid, paintToCss, resolveMode,
   type ColorKey, type GradientStop, type Mode, type Paint,
 } from '../theme.js';
+import { play } from './sound.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -40,6 +41,10 @@ function renderBasics() {
     if (v !== 'system') colorMode = v as Mode;
     renderAll();
   });
+  seg('clockStyle', s.clockStyle, (v) => {
+    patch({ clockStyle: v as Settings['clockStyle'] });
+    renderBasics();
+  });
   seg('precision', s.precision, (v) => {
     patch({ precision: v as Settings['precision'] });
     renderBasics();
@@ -72,6 +77,24 @@ function renderBasics() {
   const pauses = $<HTMLInputElement>('pausesCount');
   pauses.checked = s.pausesCount;
   pauses.onchange = () => patch({ pausesCount: pauses.checked });
+  for (const key of ['race', 'countIn', 'sounds'] as const) {
+    const box = $<HTMLInputElement>(key);
+    box.checked = s[key];
+    box.onchange = () => {
+      patch({ [key]: box.checked });
+      renderBasics();
+    };
+  }
+  $('volumeField').hidden = !s.sounds;
+  const volume = $<HTMLInputElement>('volume');
+  if (document.activeElement !== volume) volume.value = String(Math.round(s.volume * 100));
+  $('volumeVal').textContent = Math.round(s.volume * 100) + '%';
+  volume.oninput = () => {
+    patch({ volume: Number(volume.value) / 100 });
+    $('volumeVal').textContent = volume.value + '%';
+  };
+  // Let you hear the new level when you let go.
+  volume.onchange = () => play('done', Number(volume.value) / 100);
 }
 
 // ---------- colors ----------

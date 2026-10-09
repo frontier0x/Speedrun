@@ -4,7 +4,8 @@ import {
   addTasks, completeActive, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
   pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate, parseTimeInput, reopenTask, setElapsed,
-  addSubtask, toggleDone, ancestorsOf,
+  addSubtask, toggleDone, ancestorsOf, matchKey, similarity, templateFromRun, runFromTemplate, templateRecord, templateToText,
+  templateFromText, bestFor, bestIndex, pbPace, medal, pairKey, type Run,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -183,4 +184,77 @@ test('ticking a group ticks all its subtasks and moves the clock on', () => {
   assert.equal(run.activeTaskId, c.id);
   toggleDone(run, build.id, 2 * MIN);
   assert.equal(a.done || b.done, false);
+});
+
+test('task names boil down so the same task matches, with or without dates and estimates', () => {
+  assert.equal(matchKey('Emails 9.10.'), 'emails');
+  assert.equal(matchKey('emails!'), 'emails');
+  assert.equal(matchKey('Emails (Mon) 15m'), 'emails');
+  assert.equal(matchKey('Reply to emails – Freitag'), 'reply to emails');
+  assert.ok(similarity('reply emails', 'reply to emails') >= 0.7);
+  assert.ok(similarity('call mom', 'call max') < 0.7);
+});
+
+/** A finished session of a template, each task taking the given minutes. */
+function attempt(tpl: ReturnType<typeof templateFromRun>, minutes: number[], at: number): Run {
+  const run = runFromTemplate(tpl, new Date(at));
+  run.tasks.forEach((t, i) => {
+    t.elapsedMs = minutes[i] * MIN;
+    t.done = true;
+  });
+  run.endedAt = new Date(at + 1).toISOString();
+  return run;
+}
+
+test('templates keep their tasks, race by task, and know your PB and what is possible', () => {
+  const first = addTasks(newRun('manual'), parseTaskList('- Mails 10m\n- Calendar 5m\n- Plan 15m'));
+  const tpl = templateFromRun(first, 'Morning');
+  assert.equal(templateToText(tpl), '- Mails 10m\n- Calendar 5m\n- Plan 15m');
+  const a = attempt(tpl, [8, 3, 12], Date.UTC(2026, 9, 1));
+  const b = attempt(tpl, [6, 4, 13], Date.UTC(2026, 9, 2));
+  const reset = runFromTemplate(tpl, new Date(Date.UTC(2026, 9, 3)));
+  reset.tasks[0].elapsedMs = 5 * MIN;
+  reset.tasks[0].done = true;
+  reset.reset = true;
+  const rec = templateRecord(tpl, [a, b, reset]);
+  assert.equal(rec.attempts, 3);
+  assert.equal(rec.resets, 1);
+  assert.equal(rec.pb?.ms, 23 * MIN, 'a reset never counts as a run');
+  assert.equal(rec.sumOfBest, (5 + 3 + 12) * MIN, 'bests from every attempt, reset ones too');
+
+  // Racing: the template task's best, even after a rename.
+  const now = runFromTemplate(tpl, new Date(Date.UTC(2026, 9, 4)));
+  now.tasks[1].title = 'Calendar and todos';
+  assert.equal(bestFor(now.tasks[1], now, [a, b], bestIndex([a, b]), [])?.ms, 3 * MIN);
+  // PB pace: 7m on Mails against the PB's 8m, and 4m into Calendar, already past its 3m.
+  now.tasks[0].elapsedMs = 7 * MIN;
+  now.tasks[0].done = true;
+  now.tasks[1].elapsedMs = 4 * MIN;
+  assert.equal(pbPace(now, rec.pb!.tasks), 0);
+
+  // Editing the text keeps the ids of tasks whose names stay.
+  const edited = templateFromText(tpl, '- Mails 10m\n- Stretch 5m\n- Plan 20m');
+  assert.equal(edited.tasks[0].id, tpl.tasks[0].id);
+  assert.notEqual(edited.tasks[1].id, tpl.tasks[1].id);
+  assert.equal(edited.tasks[2].estimateMs, 20 * MIN);
+});
+
+test('free tasks race a similar name unless you said it is not the same task', () => {
+  const past = addTasks(newRun('manual'), parseTaskList('- Reply to emails 9.10. 20m\n- Call Mom'));
+  past.tasks[0].elapsedMs = 12 * MIN;
+  past.tasks[0].done = true;
+  past.tasks[1].elapsedMs = 6 * MIN;
+  past.tasks[1].done = true;
+  const now = addTasks(newRun('manual'), parseTaskList('- reply emails\n- Call Max\n- Accident 30m'));
+  const index = bestIndex([past]);
+  const best = bestFor(now.tasks[0], now, [past], index, []);
+  assert.equal(best?.ms, 12 * MIN);
+  assert.equal(best?.fuzzy, true);
+  assert.equal(bestFor(now.tasks[0], now, [past], index, [pairKey('reply emails', 'reply to emails')]), undefined);
+  assert.equal(bestFor(now.tasks[1], now, [past], index, []), undefined);
+  // Medals: gold beats your best, silver is under the estimate, bronze up to 10 % over.
+  const t = { ...now.tasks[2], done: true, elapsedMs: 32 * MIN };
+  assert.equal(medal(t, undefined), 'bronze');
+  assert.equal(medal({ ...t, elapsedMs: 25 * MIN }, undefined), 'silver');
+  assert.equal(medal({ ...t, elapsedMs: 25 * MIN }, { ms: 26 * MIN, from: '', at: '', key: '', fuzzy: false }), 'gold');
 });

@@ -1,8 +1,8 @@
 import type { AppState, SpeedrunApi } from '../api.js';
 import { palette, paletteVars, paintSolid, resolveMode } from '../theme.js';
 import {
-  childrenOf, formatDuration, formatEstimate, isSection, isSectionDone, summarize, taskKey, totalElapsed, totalEstimate,
-  type Run, type RunSummary, type Task,
+  childrenOf, formatDuration, formatEstimate, isSection, isSectionDone, summarize, taskKey, templateToText, totalElapsed, totalEstimate,
+  type Run, type RunSummary, type Task, type Template, type TemplateRecord,
 } from '../runs.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
@@ -14,6 +14,9 @@ let golds = new Map<string, number>();
 let open: string | null = null; // session shown with its tasks
 let liveRunId: string | null = null;
 let period: 'today' | 'week' = 'today';
+let templates: Template[] = [];
+let records: Record<string, TemplateRecord> = {};
+let openTpl: string | null = null; // template shown with its records and tasks
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -121,12 +124,13 @@ function renderSessions() {
     list.append(el('li', 'empty', 'Finish your first task and its session shows up here.'));
     return;
   }
-  for (const s of summaries) {
+  // A reset attempt counts in your totals, not as a session of its own.
+  for (const s of summaries.filter((x) => !x.reset)) {
     const li = el('li', s.id === open ? 'on' : '');
     const row = el('div', 'row');
     const run = runs.find((r) => r.id === s.id);
     // Open, its name is the place to rename it.
-    const title = s.id === open && run ? nameField(run) : el('span', 'title', s.name);
+    const title = s.id === open && run ? sessionName(run) : el('span', 'title', s.name);
     if (s.id === liveRunId && !s.endedAt) title.append(el('span', 'live', '● NOW'));
     row.append(
       title,
@@ -197,14 +201,95 @@ function taskRow(run: Run, t: Task, depth: number): HTMLLIElement {
   return li;
 }
 
-/** The session's name: click it to rename. */
-function nameField(run: Run): HTMLElement {
-  const h = el('span', 'name', run.name);
+// ---------- templates ----------
+
+function renderTemplates() {
+  $('templatesSection').hidden = !templates.length;
+  const list = $('templates');
+  list.replaceChildren();
+  for (const tpl of templates) {
+    const rec = records[tpl.id];
+    const li = el('li', tpl.id === openTpl ? 'on' : '');
+    const row = el('div', 'row');
+    const title =
+      tpl.id === openTpl
+        ? nameField(tpl.name, (name) => {
+            tpl.name = name;
+            void api.act({ type: 'renameTemplate', id: tpl.id, name });
+          })
+        : el('span', 'title', tpl.name);
+    const runs = rec ? rec.attempts - rec.resets : 0;
+    row.append(title, el('span', 'count', runs === 1 ? '1 run' : `${runs} runs`), el('span', 'num' + (rec?.pb ? ' gold' : ''), rec?.pb ? hms(rec.pb.ms) : '–'));
+    row.title = 'Your best run';
+    row.onclick = () => {
+      openTpl = openTpl === tpl.id ? null : tpl.id;
+      renderTemplates();
+    };
+    li.append(row);
+    if (tpl.id === openTpl) li.append(templateDetail(tpl, rec));
+    list.append(li);
+  }
+}
+
+function templateDetail(tpl: Template, rec: TemplateRecord | undefined): HTMLElement {
+  const box = el('div', 'detail');
+  const facts = el('dl', 'facts');
+  const fact = (k: string, v: string, cls = '', tip = '') => {
+    const d = el('div');
+    d.append(el('dt', '', k), el('dd', cls, v));
+    if (tip) d.title = tip;
+    facts.append(d);
+  };
+  fact('Best run', rec?.pb ? hms(rec.pb.ms) : '–', rec?.pb ? 'gold' : '');
+  fact('Possible', rec?.sumOfBest !== undefined ? hms(rec.sumOfBest) : '–', '', 'Your best time for every task, added up: what a perfect run would take');
+  fact('Attempts', rec ? `${rec.attempts}${rec.resets ? ` · ${rec.resets} reset` : ''}` : '0');
+  box.append(facts);
+  if (rec?.pb && rec.sumOfBest !== undefined && rec.pb.ms > rec.sumOfBest)
+    box.append(el('p', 'hint', `${formatDuration(rec.pb.ms - rec.sumOfBest)} left to find between your best run and what's possible.`));
+
+  // The tasks, as text like "Paste a list": edit and save. Renamed tasks start fresh, unchanged ones keep their bests.
+  const text = el('textarea', 'tpl-text');
+  text.value = templateToText(tpl);
+  text.rows = Math.min(12, Math.max(3, tpl.tasks.length + 1));
+  text.spellcheck = false;
+  text.onclick = (e) => e.stopPropagation();
+  const save = el('button', 'act small', 'Save tasks');
+  save.type = 'button';
+  save.disabled = true;
+  text.oninput = () => (save.disabled = text.value === templateToText(tpl));
+  save.onclick = () => {
+    void api.act({ type: 'editTemplate', id: tpl.id, text: text.value });
+    save.disabled = true;
+  };
+  const start = el('button', 'act small primary', 'Start');
+  start.type = 'button';
+  start.onclick = () => void api.act({ type: 'startTemplate', id: tpl.id });
+  const del = el('button', 'text danger', 'Delete');
+  del.type = 'button';
+  del.title = 'Delete this template. Its past sessions stay.';
+  del.onclick = () => {
+    if (del.textContent === 'Delete') {
+      del.textContent = 'Click again to delete';
+      setTimeout(() => (del.textContent = 'Delete'), 3000);
+      return;
+    }
+    openTpl = null;
+    void api.act({ type: 'deleteTemplate', id: tpl.id });
+  };
+  const row = el('div', 'actions');
+  row.append(del, el('span', 'spacer'), save, start);
+  box.append(text, row);
+  return box;
+}
+
+/** A name you click to rename. */
+function nameField(name: string, onRename: (name: string) => void): HTMLElement {
+  const h = el('span', 'name', name);
   h.title = 'Click to rename';
   h.onclick = (e) => {
     e.stopPropagation();
     const input = el('input', 'name-input');
-    input.value = run.name;
+    input.value = name;
     h.replaceWith(input);
     input.focus();
     input.select();
@@ -212,13 +297,9 @@ function nameField(run: Run): HTMLElement {
     const finish = (save: boolean) => {
       if (closed) return;
       closed = true;
-      const name = input.value.trim();
-      if (save && name && name !== run.name) {
-        run.name = name;
-        const s = summaries.find((x) => x.id === run.id);
-        if (s) s.name = name;
-        void api.act({ type: 'renameRun', id: run.id, name });
-      }
+      const next = input.value.trim();
+      if (save && next && next !== name) onRename(next);
+      renderTemplates();
       renderSessions();
     };
     input.onclick = (k) => k.stopPropagation();
@@ -229,6 +310,16 @@ function nameField(run: Run): HTMLElement {
     input.onblur = () => finish(true);
   };
   return h;
+}
+
+/** The session's name: click it to rename. */
+function sessionName(run: Run): HTMLElement {
+  return nameField(run.name, (name) => {
+    run.name = name;
+    const s = summaries.find((x) => x.id === run.id);
+    if (s) s.name = name;
+    void api.act({ type: 'renameRun', id: run.id, name });
+  });
 }
 
 // ---------- theme & data ----------
@@ -262,9 +353,15 @@ async function load(state?: AppState) {
   const data = await api.listRuns();
   runs = data.runs;
   summaries = data.summaries;
+  records = data.records;
+  templates = s.templates;
   renderOverview();
   renderChart();
-  if (!editingName()) renderSessions();
+  const busy = editingName() || document.activeElement?.classList.contains('tpl-text');
+  if (!busy) {
+    renderTemplates();
+    renderSessions();
+  }
 }
 
 let pending: ReturnType<typeof setTimeout> | undefined;

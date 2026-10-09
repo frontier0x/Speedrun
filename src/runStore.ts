@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DEFAULT_SETTINGS, type Run, type Settings } from './runs.js';
+import { DEFAULT_SETTINGS, type Run, type Settings, type Template } from './runs.js';
 
 /** Runs live in runs/YYYY-MM-DD/run-<id>.json. Settings in settings.json. */
 export class RunStore {
@@ -67,5 +67,22 @@ export class RunStore {
 
   async saveSettings(settings: Settings): Promise<void> {
     await writeFile(this.settingsPath, JSON.stringify(settings, null, 2));
+  }
+
+  /** Templates live next to settings, in templates.json. */
+  private get templatesPath() {
+    return join(this.settingsPath, '..', 'templates.json');
+  }
+
+  async loadTemplates(): Promise<Template[]> {
+    try {
+      return JSON.parse(await readFile(this.templatesPath, 'utf8'));
+    } catch {
+      return [];
+    }
+  }
+
+  async saveTemplates(templates: Template[]): Promise<void> {
+    await writeFile(this.templatesPath, JSON.stringify(templates, null, 2));
   }
 }

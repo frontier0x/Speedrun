@@ -15,6 +15,8 @@ export interface Task {
   doneAt?: string;
   /** Tasks with children are sections; their time is the sum of their children. */
   parentId?: string;
+  /** The task in the template this session was started from: stays the same when you rename it. */
+  templateTaskId?: string;
 }
 
 export interface Run {
@@ -32,6 +34,25 @@ export interface Run {
   pausedMs?: number;
   /** Epoch ms when the current pause began; undefined unless you paused. */
   pausedSince?: number;
+  /** The template this session was started from. */
+  templateId?: string;
+  /** You reset this attempt: kept for your totals, but it never counts as a finished run. */
+  reset?: boolean;
+}
+
+/** A saved task list you run again and again, like a speedrun route. */
+export interface Template {
+  id: string;
+  name: string;
+  createdAt: string;
+  tasks: TemplateTask[];
+}
+
+export interface TemplateTask {
+  id: string;
+  title: string;
+  estimateMs?: number;
+  parentId?: string;
 }
 
 export interface Settings {
@@ -55,6 +76,18 @@ export interface Settings {
   onboarded: boolean;
   /** We've turned on "Open at login" once, on first start; after that it's yours to switch. */
   loginItemSet?: boolean;
+  /** Race your best: compare each task with your best time for it. */
+  race: boolean;
+  /** Pairs of task names you said are not the same task ("a|b", see matchKey). */
+  notSame: string[];
+  /** Short sounds on go, done, a new best and the finish. */
+  sounds: boolean;
+  /** 0–1. */
+  volume: number;
+  /** "3, 2, 1, Go" before the first task of a session. */
+  countIn: boolean;
+  /** The clock's look: clean, or bold italic like a speedrun overlay. */
+  clockStyle: 'clean' | 'speedrun';
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 
@@ -69,6 +102,12 @@ export const DEFAULT_SETTINGS: Settings = {
   precision: 'ms',
   scale: 1,
   onboarded: false,
+  race: false,
+  notSame: [],
+  sounds: true,
+  volume: 0.35,
+  countIn: true,
+  clockStyle: 'clean',
 };
 
 export const MIN_SCALE = 0.6;
@@ -491,6 +530,8 @@ export function goldSplits(runs: Run[]): Map<string, number> {
 export interface RunSummary {
   id: string;
   name: string;
+  templateId?: string;
+  reset?: boolean;
   mode: Mode;
   startedAt: string;
   endedAt?: string;
@@ -511,6 +552,8 @@ export function summarize(run: Run, now = Date.now()): RunSummary {
   return {
     id: run.id,
     name: run.name,
+    templateId: run.templateId,
+    reset: run.reset,
     mode: run.mode,
     startedAt: run.startedAt,
     endedAt: run.endedAt,
@@ -522,4 +565,234 @@ export function summarize(run: Run, now = Date.now()): RunSummary {
     onEstimateRate: estimated.length ? estimated.filter((t) => t.elapsedMs <= t.estimateMs!).length / estimated.length : undefined,
     savedMs: timeSaved(run, now)?.savedMs,
   };
+}
+
+// ---------- templates ----------
+
+/** A template from a session's tasks. Updating one keeps the ids of tasks it already had, so their bests carry on. */
+export function templateFromRun(run: Run, name: string, existing?: Template, now = new Date()): Template {
+  const known = new Set(existing?.tasks.map((t) => t.id));
+  const ids = new Map<string, string>();
+  for (const t of run.tasks) ids.set(t.id, t.templateTaskId && known.has(t.templateTaskId) ? t.templateTaskId : newId());
+  return {
+    id: existing?.id ?? newId(),
+    name: name.trim() || existing?.name || run.name,
+    createdAt: existing?.createdAt ?? now.toISOString(),
+    tasks: run.tasks.map((t) => ({
+      id: ids.get(t.id)!,
+      title: t.title,
+      estimateMs: t.estimateMs,
+      parentId: t.parentId ? ids.get(t.parentId) : undefined,
+    })),
+  };
+}
+
+/** A fresh session from a template: every task open, on 0:00, linked to its template task. */
+export function runFromTemplate(tpl: Template, now = new Date()): Run {
+  const run = newRun('manual', now);
+  run.name = tpl.name;
+  run.templateId = tpl.id;
+  const ids = new Map(tpl.tasks.map((t) => [t.id, newId()]));
+  run.tasks = tpl.tasks.map((t) => ({
+    id: ids.get(t.id)!,
+    title: t.title,
+    estimateMs: t.estimateMs,
+    elapsedMs: 0,
+    done: false,
+    parentId: t.parentId ? ids.get(t.parentId) : undefined,
+    templateTaskId: t.id,
+  }));
+  return run;
+}
+
+/** A template as an editable list, like "Paste a list": two spaces per level, estimate at the end. */
+export function templateToText(tpl: Template): string {
+  const depth = (t: TemplateTask): number => {
+    const p = tpl.tasks.find((x) => x.id === t.parentId);
+    return p ? depth(p) + 1 : 0;
+  };
+  return tpl.tasks
+    .map((t) => '  '.repeat(depth(t)) + '- ' + t.title + (t.estimateMs !== undefined ? ' ' + formatEstimate(t.estimateMs).replace(' ', '') : ''))
+    .join('\n');
+}
+
+/** Reads an edited list back into the template. A task whose name is unchanged keeps its id, and so its bests. */
+export function templateFromText(tpl: Template, text: string): Template {
+  const parsed = parseTaskList(text);
+  const free = [...tpl.tasks];
+  const ids = new Map<string, string>();
+  for (const t of parsed) {
+    const i = free.findIndex((x) => matchKey(x.title) === matchKey(t.title));
+    ids.set(t.id, i >= 0 ? free.splice(i, 1)[0].id : newId());
+  }
+  return {
+    ...tpl,
+    tasks: parsed.map((t) => ({ id: ids.get(t.id)!, title: t.title, estimateMs: t.estimateMs, parentId: t.parentId ? ids.get(t.parentId) : undefined })),
+  };
+}
+
+/** A session that ran its whole route: every task done, and not reset. */
+export const isComplete = (run: Run) => !run.reset && !!run.endedAt && run.tasks.length > 0 && run.tasks.every((t) => t.done || isSection(run, t));
+
+export interface TemplateRecord {
+  /** Every attempt, finished or reset. */
+  attempts: number;
+  resets: number;
+  /** Your fastest finished run, its time and each task's time in it. */
+  pb?: { runId: string; ms: number; startedAt: string; tasks: Record<string, number> };
+  /** Your best time per template task, over every attempt. */
+  bestByTask: Record<string, number>;
+  /** The sum of those bests: what's possible if every task went your best way. */
+  sumOfBest?: number;
+  /** Finished runs, fastest first. */
+  finishedMs: { runId: string; ms: number }[];
+  lastAt?: string;
+}
+
+export function templateRecord(tpl: Template, runs: Run[], now = Date.now()): TemplateRecord {
+  const mine = runs.filter((r) => r.templateId === tpl.id);
+  const finished = mine.filter(isComplete).map((r) => ({ run: r, ms: runElapsed(r, now) })).sort((a, b) => a.ms - b.ms);
+  const bestByTask: Record<string, number> = {};
+  for (const r of mine)
+    for (const t of r.tasks) {
+      if (!t.templateTaskId || !t.done || isSection(r, t) || !countsAsBest(t)) continue;
+      const prev = bestByTask[t.templateTaskId];
+      if (prev === undefined || t.elapsedMs < prev) bestByTask[t.templateTaskId] = t.elapsedMs;
+    }
+  const leaves = tpl.tasks.filter((t) => !tpl.tasks.some((c) => c.parentId === t.id));
+  const pbRun = finished[0]?.run;
+  return {
+    attempts: mine.length,
+    resets: mine.filter((r) => r.reset).length,
+    pb: pbRun && {
+      runId: pbRun.id,
+      ms: finished[0].ms,
+      startedAt: pbRun.startedAt,
+      tasks: Object.fromEntries(pbRun.tasks.filter((t) => t.templateTaskId && !isSection(pbRun, t)).map((t) => [t.templateTaskId!, t.elapsedMs])),
+    },
+    bestByTask,
+    sumOfBest: leaves.length && leaves.every((t) => bestByTask[t.id] !== undefined) ? leaves.reduce((a, t) => a + bestByTask[t.id], 0) : undefined,
+    finishedMs: finished.map((f) => ({ runId: f.run.id, ms: f.ms })),
+    lastAt: mine.map((r) => r.startedAt).sort().at(-1),
+  };
+}
+
+// ---------- racing your best ----------
+
+const WEEKDAYS = /\b(mon|tue|wed|thu|fri|sat|sun|mo|di|mi|do|fr|sa|so|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|heute|kw)\b/g;
+
+/**
+ * A task name boiled down for comparing: lower case, no estimate, numbers, dates, weekdays or punctuation.
+ * "Emails 9.10.", "emails!" and "Emails (Mon) 15m" all become "emails".
+ */
+export function matchKey(title: string): string {
+  return splitEstimate(title)
+    .title.toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\d+/g, ' ')
+    .replace(WEEKDAYS, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** How alike two keys are, by shared words: 1 is the same, 0 nothing in common. */
+export function similarity(a: string, b: string): number {
+  if (a === b) return 1;
+  const wa = new Set(a.split(' ').filter(Boolean));
+  const wb = new Set(b.split(' ').filter(Boolean));
+  if (!wa.size || !wb.size) return 0;
+  let shared = 0;
+  for (const w of wa) if (wb.has(w)) shared++;
+  return (2 * shared) / (wa.size + wb.size);
+}
+
+export const SIMILAR = 0.7;
+export const pairKey = (a: string, b: string) => [a, b].sort().join('|');
+
+/** A finished time worth racing: not ticked off by accident seconds in, or at a third of its estimate. */
+export function countsAsBest(t: Task): boolean {
+  return t.elapsedMs >= 1000 && (t.estimateMs === undefined || t.elapsedMs >= t.estimateMs / 3);
+}
+
+export interface Best {
+  ms: number;
+  /** The session it's from, and when. */
+  from: string;
+  at: string;
+  /** The name it matched, as a key; "" for a template task. */
+  key: string;
+  /** Matched by a similar name, not exactly: you can say it's not the same task. */
+  fuzzy: boolean;
+}
+
+/** Every finished task in past sessions, ready to match against. */
+export function bestIndex(runs: Run[]): { key: string; ms: number; from: string; at: string }[] {
+  const out: { key: string; ms: number; from: string; at: string }[] = [];
+  for (const r of runs)
+    for (const t of r.tasks) {
+      if (!t.done || isSection(r, t) || !countsAsBest(t)) continue;
+      const key = matchKey(t.title);
+      if (key) out.push({ key, ms: t.elapsedMs, from: r.name, at: r.startedAt });
+    }
+  return out;
+}
+
+/**
+ * Your best time for a task. In a session from a template, it's the best for that template task.
+ * Otherwise the best for the same name or a similar one, unless you said they're not the same.
+ */
+export function bestFor(t: Task, run: Run, past: Run[], index: ReturnType<typeof bestIndex>, notSame: string[]): Best | undefined {
+  if (run.templateId && t.templateTaskId) {
+    let best: Best | undefined;
+    for (const r of past) {
+      if (r.templateId !== run.templateId) continue;
+      for (const x of r.tasks)
+        if (x.templateTaskId === t.templateTaskId && x.done && !isSection(r, x) && countsAsBest(x) && (!best || x.elapsedMs < best.ms))
+          best = { ms: x.elapsedMs, from: r.name, at: r.startedAt, key: '', fuzzy: false };
+    }
+    if (best) return best;
+  }
+  const key = matchKey(t.title);
+  if (!key) return undefined;
+  const blocked = new Set(notSame);
+  let best: Best | undefined;
+  for (const e of index) {
+    const exact = e.key === key;
+    if (!exact && (similarity(key, e.key) < SIMILAR || blocked.has(pairKey(key, e.key)))) continue;
+    if (!best || e.ms < best.ms) best = { ms: e.ms, from: e.from, at: e.at, key: e.key, fuzzy: !exact };
+  }
+  return best;
+}
+
+/** Medal for a finished task: gold for a new best, silver under the estimate, bronze up to 10 % over. */
+export function medal(t: Task, best: Best | undefined): 'gold' | 'silver' | 'bronze' | undefined {
+  if (!t.done) return undefined;
+  if (best && t.elapsedMs < best.ms) return 'gold';
+  if (t.estimateMs === undefined) return undefined;
+  if (t.elapsedMs <= t.estimateMs) return 'silver';
+  if (t.elapsedMs <= t.estimateMs * 1.1) return 'bronze';
+  return undefined;
+}
+
+/**
+ * How you're doing against your fastest run of this template, at this point: over the tasks both
+ * runs have, finished ones count their difference and the running one counts once it's past your PB's.
+ */
+export function pbPace(run: Run, pbTasks: Record<string, number>, now = Date.now()): number | undefined {
+  let d = 0;
+  let any = false;
+  for (const t of run.tasks) {
+    if (isSection(run, t) || !t.templateTaskId) continue;
+    const pb = pbTasks[t.templateTaskId];
+    if (pb === undefined) continue;
+    const ms = liveElapsed(run, t, now);
+    if (t.done) {
+      d += ms - pb;
+      any = true;
+    } else if (ms > pb) {
+      d += ms - pb;
+      any = true;
+    }
+  }
+  return any ? d : undefined;
 }

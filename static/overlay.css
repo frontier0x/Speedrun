@@ -214,3 +214,71 @@ button.text:hover { color: var(--clock); background: none; }
 .list .num { min-width: 34px; text-align: right; }
 .list .est { min-width: 40px; text-align: center; }
 .list li > .num + .num { min-width: 40px; }
+
+/* ---------- racing ---------- */
+/* Reset sits by the play button, open timer only; the first click arms it, the second resets. */
+.panel:not(.open) .reset { display: none; }
+.panel.open .reset { margin-left: auto; }
+.panel.open .reset:not([hidden]) + .go { margin-left: 0; }
+.reset {
+  width: 26px; height: 26px; flex: none; padding: 0; border: none; border-radius: 50%; display: grid; place-items: center;
+  background: var(--faint); color: var(--dim);
+}
+.reset:hover { background: var(--hover); color: var(--clock); }
+.reset.armed { background: var(--behind-fill); color: #fff; }
+.reset svg { width: 14px; height: 14px; }
+
+/* Your best for this task, live: click a fuzzy match to say it's not the same task. */
+.race { padding: 0; border: none; background: none; font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 12px; color: var(--dim); white-space: nowrap; }
+.race .ahead { color: var(--ahead); }
+.race .behind { color: var(--behind); }
+.race.fuzzy { cursor: pointer; }
+.race.fuzzy:hover { color: var(--clock); }
+.not-same { align-self: flex-start; margin-top: -4px; padding: 3px 9px; border-radius: 999px; font-size: 11px; border: 1px solid var(--faint); background: none; color: var(--dim); }
+.not-same:hover { color: var(--clock); border-color: var(--dim); }
+
+/* What just happened, in place of the task name for a moment: −0:42, +1:10 or a new best. */
+.task.flash { font-family: var(--digits); font-variant-numeric: tabular-nums; font-weight: 600; }
+.task.flash.ahead { color: var(--ahead); }
+.task.flash.behind { color: var(--behind); }
+.task.flash.gold { color: var(--gold); animation: shine 1.4s ease-out; }
+.clock.shine { animation: shine 1.4s ease-out; }
+@keyframes shine { 0% { filter: brightness(1.8) drop-shadow(0 0 6px var(--gold)); } 100% { filter: none; } }
+
+/* "3, 2, 1, Go" where the clock is. */
+.clock.count-in { text-align: center; }
+
+/* Templates as chips, for an empty session. */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { padding: 4px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--faint); background: transparent; }
+.chips button:hover { background: var(--button-fill); color: var(--button-ink); border-color: transparent; }
+.chips .label { width: 100%; font-size: 11px; color: var(--dim); }
+.paste input { padding: 7px 10px; font-size: 12px; border-radius: 10px; }
+
+/* The finish: PB and rank, and a medal per task. */
+.result { display: flex; flex-direction: column; gap: 4px; background: var(--background-fill); }
+.rank { font-size: 12px; color: var(--dim); margin: -6px 0 8px; }
+.saved-label.gold { color: var(--gold); font-weight: 600; }
+.saved-label.behind { color: var(--behind); }
+.medals { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.medals li { display: flex; align-items: center; gap: 8px; }
+.medals .m { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--faint); }
+.medals .m.gold { background: var(--gold); }
+.medals .m.silver { background: #c9ccd1; }
+.medals .m.bronze { background: #c98a5b; }
+.medals .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.medals .num { font-family: var(--digits); font-variant-numeric: tabular-nums; color: var(--dim); min-width: 40px; text-align: right; }
+.medals .num.ahead { color: var(--ahead); }
+.medals .num.behind { color: var(--behind); }
+.medals .num.gold { color: var(--gold); }
+.medals .more-tasks { color: var(--dim); }
+
+/* Style "Speedrun": bold italic digits, like a speedrun overlay. */
+.style-speedrun .clock { font-family: -apple-system, 'SF Pro Display', system-ui, sans-serif; font-style: italic; font-weight: 800; letter-spacing: -0.02em; }
+.summary .row { white-space: nowrap; gap: 12px; }
+.mode-row .race { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.mode-row .switch { flex: none; }
+/* Suggestions while typing come from the list itself; no dropdown arrow in the field. */
+input::-webkit-calendar-picker-indicator { display: none !important; }
+.mode-row .race:not([hidden]) ~ .spacer { display: none; }
+.delta:empty { display: none; }
