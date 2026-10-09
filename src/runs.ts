@@ -89,6 +89,8 @@ export interface Settings {
   /** The clock's look: clean, or bold italic like a speedrun overlay. */
   clockStyle: 'clean' | 'speedrun';
   overlayBounds?: { x: number; y: number; width: number; height: number };
+  /** 3 · 2 · 1 · Go is off by default since 0.11.5; this marks that the change was applied once. */
+  countInDefaulted?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -106,7 +108,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notSame: [],
   sounds: true,
   volume: 0.35,
-  countIn: true,
+  countIn: false,
   clockStyle: 'clean',
 };
 

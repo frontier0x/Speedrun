@@ -26,9 +26,9 @@ The clock's color tells you how you're doing: white while it runs, green while y
 estimate, red once you're over, grey while paused.
 
 Under it sits the **session clock**: all the time you've spent on this session's tasks. It is green while
-you're on or under your plan and red once you're behind, with the time saved or lost next to it. When you
-finish the last task or click End session, the panel shows the total time you saved (or lost) against
-your estimates. Type another task right there to keep the same session going (its clock starts at once);
+you're on or under your plan and red once you're behind, with the time saved or lost next to it. Finishing your last
+task keeps the session open for the next one (a template run ends there: it's complete). When you click
+End session, the panel shows the total time you saved (or lost) against your estimates. Type another task right there to keep the same session going (its clock starts at once);
 New session starts a fresh list.
 
 The round button next to the clock starts (green) and pauses (red) the task; it shows when the timer
@@ -89,9 +89,9 @@ needs no macOS permissions.
 - **Finishing**: ticking a task off shows its result for a moment where the task name is, in gold with a
   shine for a new best. A template run all the way through ends with your time, **★ NEW PB**, where it ranks
   among your attempts, and a medal per task: gold for a new best, silver under the estimate, bronze up to
-  10 % over. **Copy** puts the result on the clipboard as a picture.
-- **3, 2, 1, Go** before the first task of a session, short **sounds** (with a volume) and a bold italic
-  **Speedrun** clock style (Settings › Look) round it off. Each can be switched off.
+  10 % over. In Stats, **Copy as picture** puts a session on the clipboard as a picture.
+- **3, 2, 1, Go** before the first task of a session (off by default, Settings › Timer), short **sounds**
+  (with a volume) and a bold italic **Speedrun** clock style (Settings › Look) round it off.
 
 ## Fixing things up
 
@@ -142,6 +142,7 @@ Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
 
 ```sh
 npm test       # unit tests
+npm run smoke  # starts the real timer with a throwaway profile and clicks through the main paths (macOS)
 npm run dist   # builds release/Speedrun-*.dmg locally
 ```
 

@@ -174,6 +174,22 @@ function detail(run: Run): HTMLElement {
   };
   add(run.tasks.filter((t) => !t.parentId || !run.tasks.some((p) => p.id === t.parentId)), 0);
   if (run.tasks.length) box.append(tasks);
+
+  // The session as a picture, ready to paste anywhere (it used to sit on the timer's summary).
+  const copy = el('button', 'link', 'Copy as picture');
+  copy.type = 'button';
+  copy.onclick = async (e) => {
+    e.stopPropagation();
+    const card = box.closest('li') ?? box;
+    copy.style.visibility = 'hidden';
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const r = card.getBoundingClientRect();
+    await api.act({ type: 'copyResult', from: 'stats', rect: { x: r.x, y: r.y, width: r.width, height: r.height } });
+    copy.style.visibility = '';
+    copy.textContent = 'Copied ✓';
+    setTimeout(() => (copy.textContent = 'Copy as picture'), 1500);
+  };
+  box.append(copy);
   return box;
 }
 

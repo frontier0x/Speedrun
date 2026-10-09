@@ -59,7 +59,11 @@ export class RunStore {
     try {
       // `mode` and `focusTracking` are left over from removed tracking features.
       const { mode: _mode, focusTracking: _focus, ...saved } = JSON.parse(await readFile(this.settingsPath, 'utf8'));
-      return { ...DEFAULT_SETTINGS, ...saved };
+      const settings = { ...DEFAULT_SETTINGS, ...saved };
+      // 3 · 2 · 1 · Go used to be on by default; turn it off once, after that it's your choice.
+      if (!settings.countInDefaulted) settings.countIn = false;
+      settings.countInDefaulted = true;
+      return settings;
     } catch {
       return { ...DEFAULT_SETTINGS };
     }

@@ -46,7 +46,6 @@
 
     <!-- Shown when a session ends: what you saved against your plan. -->
     <section class="summary" id="summary" hidden>
-      <!-- The result: what "Copy" puts on the clipboard as a picture. -->
       <div class="result" id="result">
       <div class="task" id="sumTitle">Session done</div>
       <div class="clock" id="savedClock"><span id="savedHms">0:00:00</span><span class="ms" id="savedMs">.000</span></div>
@@ -61,11 +60,6 @@
         <div><dt>Actual</dt><dd id="factActual"></dd></div>
       </dl>
       </div>
-      <!-- All your sessions together: on tasks, and paused. -->
-      <dl class="facts totals">
-        <div><dt>Today</dt><dd id="totToday"></dd></div>
-        <div><dt>Last 7 days</dt><dd id="totWeek"></dd></div>
-      </dl>
       <!-- Done with everything? Type the next task and keep the session going. -->
       <form class="add" id="continueForm">
         <input id="continueInput" list="taskNames" placeholder="Add a task and keep going, e.g. Emails 15m" autocomplete="off" />
@@ -75,7 +69,6 @@
       </form>
       <div class="row">
         <button class="text" id="saveTpl" type="button" title="Run these tasks again any time, and race your best">Save as template</button>
-        <button class="text" id="copyBtn" type="button" title="Copy this result as a picture">Copy</button>
         <button class="text" id="summaryStats" type="button">Stats</button>
         <span class="spacer"></span>
         <button class="text" id="newSession" type="button">New session</button>
