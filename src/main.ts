@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
-  addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
+  addSubtask, addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
   parseTaskList, parseTimeInput, pause, reopenTask, setElapsed, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
 } from './runs.js';
 import { RunStore } from './runStore.js';
@@ -142,6 +142,19 @@ async function act(a: Action) {
     case 'dismissSummary':
       finished = null;
       break;
+    case 'continueSession':
+      // Back into the session you just ended: same run, same clock, room for the next task.
+      if (finished && !run) {
+        run = finished;
+        run.endedAt = undefined;
+        finished = null;
+      }
+      break;
+    case 'addSubtask': {
+      const q = parseQuickAdd(a.text);
+      if (run && q) addSubtask(run, a.parentId, q.task, now);
+      break;
+    }
     // Dragging reads the cursor here, in screen pixels, so it works at any zoom.
     case 'dragStart':
       if (overlay && !overlay.isDestroyed())

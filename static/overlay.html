@@ -15,8 +15,21 @@
         <button class="min" id="minBtn" type="button" title="Hide to the menu bar (⌥⇧⌘Space)">–</button>
         <button class="quit" id="quitBtn" type="button" title="Quit Speedrun">×</button>
       </div>
-      <div class="task" id="task"></div>
-      <div class="clock" id="clock"><span id="hms">0:00:00</span><span class="ms" id="ms">.000</span></div>
+      <div class="task-row">
+        <button class="done-dot" id="faceDone" type="button" title="Done: on to the next task (⌘⇧↩)"></button>
+        <div class="task" id="task"></div>
+      </div>
+      <div class="clock-row">
+        <div class="clock" id="clock"><span id="hms">0:00:00</span><span class="ms" id="ms">.000</span></div>
+        <button class="play" id="facePlay" type="button" title="Go (⌘⇧Space)"></button>
+      </div>
+      <!-- Working on a subtask: where you are in its parent task. -->
+      <div class="parent" id="parent" hidden>
+        <span class="name" id="parentName"></span>
+        <span class="time" id="parentTime"></span>
+        <span class="spacer"></span>
+        <span class="progress" id="parentProgress"></span>
+      </div>
       <div class="session" id="session" hidden>
         <span class="label">Session</span>
         <span class="time" id="sessionTime">0:00:00</span>
@@ -37,10 +50,11 @@
         <div><dt>Planned</dt><dd id="factPlanned"></dd></div>
         <div><dt>Actual</dt><dd id="factActual"></dd></div>
       </dl>
+      <button class="act primary" id="continueSession" type="button" title="Back into this session, with room for another task">Continue with next task</button>
       <div class="row">
         <button class="text" id="summaryStats" type="button">Stats</button>
         <span class="spacer"></span>
-        <button class="act primary small" id="newSession" type="button">New session</button>
+        <button class="text" id="newSession" type="button">Start a new session</button>
       </div>
     </section>
 
@@ -51,20 +65,20 @@
         <ol>
           <li>Add a task with your guess, e.g. <kbd>Write copy 25m</kbd></li>
           <li><kbd>⌘⇧Space</kbd> starts and pauses, from any app</li>
-          <li><kbd>⌘⇧↩</kbd> or Done moves on to the next task</li>
+          <li><kbd>⌘⇧↩</kbd> or the circle by the task's name moves on to the next task</li>
+          <li>Hover a task and press <kbd>+</kbd> to split it into subtasks</li>
           <li>Click the clock to fold this away, drag it to move, drag its corner to resize</li>
         </ol>
         <button class="act primary small" id="tipsOk" type="button">Got it</button>
       </div>
-      <div class="estimate-row">
-        <button class="estimate" id="estimate" type="button"></button>
+      <div class="status-row">
         <span class="delta" id="delta"></span>
-      </div>
-      <div class="picker" id="picker" hidden></div>
-
-      <div class="actions" id="actions">
-        <button class="act primary" id="play" type="button" title="Go / Pause (⌘⇧Space)"></button>
-        <button class="act" id="done" type="button" title="Finish this task and start the next (⌘⇧↩)">Done</button>
+        <span class="spacer"></span>
+        <label class="switch" title="Count down from the estimate, then into the red">
+          <input type="checkbox" id="countdownToggle" />
+          <span class="track"><span class="knob"></span></span>
+          Countdown
+        </label>
       </div>
 
       <ol class="list" id="list"></ol>

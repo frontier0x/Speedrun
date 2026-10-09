@@ -33,6 +33,8 @@ export type Action =
   | { type: 'openDashboard' }
   | { type: 'hideOverlay' }
   | { type: 'dismissSummary' }
+  | { type: 'continueSession' }
+  | { type: 'addSubtask'; parentId: string; text: string }
   | { type: 'openSettings' }
   | { type: 'quit' };
 

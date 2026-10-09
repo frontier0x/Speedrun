@@ -47,12 +47,45 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 
 /* ---------- face ---------- */
 .face { padding: 10px 14px 10px; cursor: default; position: relative; }
-.task {
-  font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1px;
-  /* Never widens the timer: it takes the clock's width and cuts off with "…". */
-  width: 0; min-width: 100%; padding-right: 34px;
-}
+/* The task line never widens the timer: it takes the clock row's width and cuts off with "…". */
+.task-row { display: flex; align-items: center; gap: 6px; width: 0; min-width: 100%; padding-right: 34px; margin-bottom: 1px; }
+.task { flex: 1; min-width: 0; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task .path { color: var(--dim); font-weight: 400; }
 .task.empty { color: var(--dim); font-weight: 400; }
+
+/* The circle by the task's name: click it when the task is done. */
+.done-dot {
+  width: 13px; height: 13px; flex: none; padding: 0; border-radius: 50%; border: 1.5px solid var(--dim); background: none;
+  display: grid; place-items: center; font-size: 8px; line-height: 1; color: transparent; cursor: pointer;
+}
+.done-dot::after { content: '✓'; }
+.done-dot:hover { border-color: var(--ahead); background: var(--ahead); color: var(--button-ink); }
+
+/* Clock and the play/pause button beside it: green to go, red to stop. */
+.clock-row { display: flex; align-items: center; gap: 12px; }
+.play {
+  width: 30px; height: 30px; flex: none; padding: 0; border: none; border-radius: 50%; position: relative; cursor: pointer;
+  background: var(--ahead-fill); transition: transform 0.12s, filter 0.12s;
+}
+.play:hover { filter: brightness(1.1); transform: scale(1.06); }
+.play:active { transform: scale(0.96); }
+.play::before {
+  content: ''; position: absolute; inset: 0; margin: auto; width: 11px; height: 12px; background: var(--button-ink);
+  clip-path: polygon(15% 0, 100% 50%, 15% 100%); left: 2px;
+}
+.play.running { background: var(--behind-fill); }
+.play.running::before { left: 0; width: 10px; height: 11px; clip-path: polygon(0 0, 35% 0, 35% 100%, 0 100%, 0 0, 65% 0, 100% 0, 100% 100%, 65% 100%, 65% 0); }
+.play:disabled { opacity: 0.3; cursor: default; transform: none; filter: none; }
+
+/* On a subtask: its parent task's total time and how many subtasks are done. */
+.parent {
+  display: flex; align-items: baseline; gap: 6px; width: 0; min-width: 100%; margin-top: 4px;
+  font-size: 11px; color: var(--dim); white-space: nowrap;
+}
+.parent .name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.parent .time, .parent .progress { font-family: var(--digits); font-variant-numeric: tabular-nums; }
+.parent .time.ahead { color: var(--ahead); }
+.parent .time.behind { color: var(--behind); }
 
 /* Hide and quit, top right, only while you hover. */
 .winctl { position: absolute; top: 7px; right: 8px; display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
@@ -94,10 +127,16 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 
 /* ---------- more ---------- */
 .more { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 9px; }
-.estimate-row { display: flex; align-items: baseline; gap: 10px; margin-top: -2px; }
-.estimate { padding: 3px 9px; border-radius: 999px; font-size: 12px; background: var(--faint); border: none; }
-.estimate:hover { background: var(--hover); }
-.estimate.unset { color: var(--dim); }
+/* Under the clock when open: how much is left, and the countdown switch. */
+.status-row { display: flex; align-items: center; gap: 10px; min-height: 20px; margin-top: -2px; }
+.switch { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; color: var(--dim); cursor: pointer; user-select: none; }
+.switch:hover { color: var(--text); }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch .track { width: 24px; height: 14px; border-radius: 999px; background: var(--hover); position: relative; transition: background 0.15s; }
+.switch .knob { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--text); transition: transform 0.15s; }
+.switch input:checked + .track { background: var(--ahead-fill); }
+.switch input:checked + .track .knob { transform: translateX(10px); background: var(--button-ink); }
+.switch input:focus-visible + .track { outline: 2px solid var(--clock); outline-offset: 2px; }
 .delta { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 13px; color: var(--dim); }
 .delta.ahead { color: var(--ahead); }
 .delta.behind { color: var(--behind); }
@@ -113,6 +152,7 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .tips ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
 .tips kbd { font-family: inherit; font-size: 11px; padding: 0 5px; border-radius: 4px; background: var(--faint); color: var(--clock); white-space: nowrap; }
 .tips .act { align-self: flex-start; }
+.summary #continueSession { margin: 4px 0 10px; padding: 8px 0; }
 
 .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .act { padding: 6px 0; border-radius: 10px; font-size: 13px; font-weight: 600; background: var(--faint); border: none; }
@@ -126,8 +166,19 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 .list { list-style: none; margin: 0 -8px; padding: 0; max-height: 186px; overflow-y: auto; }
 .list li { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
 .list li:hover, .list li.current { background: var(--faint); }
-.list li.section { cursor: default; color: var(--dim); font-size: 11px; padding-top: 10px; }
-.list li.section:hover { background: none; }
+.list li.section { cursor: default; padding-top: 7px; }
+.list li.section .name { font-weight: 600; }
+.list li.section .progress { font-family: var(--digits); font-variant-numeric: tabular-nums; font-size: 11px; color: var(--dim); }
+.list li.section.done .name { color: var(--dim); }
+/* Subtasks sit under their task with a thin guide line. */
+.list li.sub { padding-left: calc(8px + var(--depth) * 16px); }
+.list li.sub::before { content: ''; align-self: stretch; width: 1px; margin: -5px 0 -5px -9px; background: var(--faint); }
+.list .plus { opacity: 0; color: var(--dim); background: none; border: none; padding: 0 2px; font-size: 14px; line-height: 1; }
+.list li:hover .plus { opacity: 1; }
+.list .plus:hover { color: var(--clock); }
+.list li.add-sub { cursor: default; padding-left: calc(30px + var(--depth) * 16px); }
+.list li.add-sub:hover { background: none; }
+.list li.add-sub input { padding: 4px 8px; font-size: 12px; border-radius: 7px; }
 .list .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list li.current .name { color: var(--clock); font-weight: 500; }
 .list li.done .name { color: var(--dim); }

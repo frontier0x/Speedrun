@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   addTasks, completeActive, goldSplits, moveTask, newRun, nextTask, parseDuration, parseQuickAdd,
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
-  pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate, parseTimeInput, reopenTask, setElapsed,
+  pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate, parseTimeInput, reopenTask, setElapsed, addSubtask, ancestorsOf, subtaskProgress, parseQuickAdd as pqa,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -152,4 +152,38 @@ test('correcting a time keeps a running task running, and finished tasks can be 
   assert.equal(run.activeTaskId, a.id);
   assert.equal(totalElapsed(run, a, 11 * MIN), 7 * MIN);
   assert.equal(b.elapsedMs, 7 * MIN); // B ran from 3 to 10 before A was picked back up
+});
+
+test('subtasks: the parent adds up time and estimates, and the clock walks through them', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- Landing page\n- Emails 15m'));
+  const [page, emails] = run.tasks;
+  startTask(run, page.id, 0);
+  const hero = pqa('Hero 20m')!.task;
+  const pricing = pqa('Pricing 10m')!.task;
+  addSubtask(run, page.id, hero, 2 * MIN); // 2 min on the parent itself, then the clock moves to Hero
+  addSubtask(run, page.id, pricing, 2 * MIN);
+  assert.deepEqual(run.tasks.map((t) => t.title), ['Landing page', 'Hero', 'Pricing', 'Emails']);
+  assert.equal(run.activeTaskId, hero.id);
+  assert.deepEqual(ancestorsOf(run, hero).map((t) => t.title), ['Landing page']);
+  assert.equal(totalEstimate(run, page), 30 * MIN);
+  completeActive(run, 17 * MIN); // Hero in 15: 5 saved; Pricing starts
+  assert.equal(run.activeTaskId, pricing.id);
+  assert.deepEqual(subtaskProgress(run, page), { done: 1, total: 2 });
+  completeActive(run, 29 * MIN); // Pricing in 12: 2 over; Emails next
+  assert.equal(run.activeTaskId, emails.id);
+  assert.equal(totalElapsed(run, page, 29 * MIN), 29 * MIN);
+  assert.equal(timeSaved(run, 29 * MIN)!.savedMs, 3 * MIN);
+});
+
+test('a parent with only its own estimate is measured as a whole', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- Page 30m'));
+  const [page] = run.tasks;
+  addSubtask(run, page.id, pqa('Hero')!.task, 0);
+  addSubtask(run, page.id, pqa('Pricing')!.task, 0);
+  resume(run, 0);
+  completeActive(run, 10 * MIN);
+  completeActive(run, 25 * MIN);
+  assert.equal(timeSaved(run, 25 * MIN)!.savedMs, 5 * MIN);
 });

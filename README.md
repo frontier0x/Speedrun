@@ -18,8 +18,11 @@ menu bar menu to have it start with your Mac.
 
 ## The timer
 
-A small panel floats above every app, every Space and full-screen windows. It shows two things: the
-task you're on and a big clock, `0:12:34.567`, in hours, minutes, seconds and milliseconds.
+A small panel floats above every app, every Space and full-screen windows. It shows the task you're on
+and a big clock, `0:12:34.567`, in hours, minutes, seconds and milliseconds. Beside the clock is a round
+**play** button (green, `⌘⇧Space`) that turns into a red **pause** button while the clock runs; beside the
+task's name is a **circle**: click it when the task is done and the next one starts (`⌘⇧↩`). Both stay
+there when the panel is folded away.
 
 The clock's color tells you how you're doing: white while it runs, green while you're under your
 estimate, red once you're over, grey while paused.
@@ -27,12 +30,13 @@ estimate, red once you're over, grey while paused.
 Under it sits the **session clock**: all the time you've spent on this session's tasks. It is green while
 you're on or under your plan and red once you're behind, with the time saved or lost next to it. When you
 finish the last task or click End session, the panel shows the total time you saved (or lost) against
-your estimates, then New session starts a fresh list.
+your estimates. **Continue with next task** takes you back into the same session to add more, or start a
+fresh one.
 
-Pausing stops both clocks and counts the pause; the summary shows how long you paused. Under Settings in
-the open panel you can turn on **Countdown** (the task clock counts down from your estimate, then into
-the red with a minus) and **Count pauses in the session** (off by default, so pauses don't add to the
-session time).
+Pausing stops both clocks and counts the pause; the summary shows how long you paused. **Countdown** is a
+switch right under the clock when the panel is open: the task clock counts down from your estimate, then
+into the red with a minus. **Count pauses in the session** in Settings is off by default, so pauses don't
+add to the session time.
 
 Hover the timer for **–** (hide to the menu bar) and **×** (quit). Drag its bottom-right corner to make it
 bigger or smaller.
@@ -43,16 +47,27 @@ hex like `#3fd68a` or `#00000080` (the last two digits are opacity), or start fr
 
 Click the clock to open the rest (drag it to move it):
 
-- **Estimate**: pick 5m, 10m, 15m, 25m, 45m, 1h, 1h30m or 2h, or type any time. The panel shows how much
-  is left or how far over you are.
-- **Start / Pause** (`⌘⇧Space`) and **Done**. Done (`⌘⇧↩`) finishes the task and starts the next one.
+- How much of the estimate is **left**, or how far **over** you are, and the **Countdown** switch.
 - **Your list**: click a task to switch to it, drag to reorder, double-click to rename, click its
-  estimate to change it. Finished tasks show their time and how far under or over the estimate they
+  estimate to pick 5m, 10m, 15m, 25m, 45m, 1h, 1h30m or 2h or type any time. Finished tasks show their time and how far under or over the estimate they
   were, in gold if you beat your best time for that task.
 - **Add a task** one at a time (`Write copy 30m` sets a 30-minute estimate, a leading `!` puts it on
   top), or **Paste a list**: bullets, checkboxes, `#` headings and indentation become tasks and
   sections, and `30m`, `~30m`, `(1h)` or `[45m]` become estimates.
-- **End run** saves the run, so the next task starts a fresh one.
+- **End session** stops the clock and shows what you saved.
+
+### Subtasks
+
+Hover a task and press **+** to split it into subtasks (or indent them in a pasted list). The clock moves
+through them in order, and the task above them becomes their parent:
+
+- Its time is everything spent on it and its subtasks; its estimate is its own if you set one, or else the
+  sum of the subtasks' estimates. The list shows both, and how many subtasks are done (`2/4`).
+- While you're on a subtask, the panel shows the path (`Landing page › Hero`) and, under the clock, the
+  parent's total against its estimate and how many subtasks are done.
+- Time saved counts each subtask against its own estimate. If only the parent has an estimate, the whole
+  task is measured against that once all its subtasks are done.
+- Click a parent to work on its next open subtask. Removing a parent removes its subtasks.
 
 Speedrun doesn't watch your screen, read your apps or send anything anywhere. It's just a timer, and it
 needs no macOS permissions.
