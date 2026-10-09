@@ -95,6 +95,7 @@ try {
   await act({ type: 'endRun' });
   s = await state();
   check('End session shows the summary', Boolean(s.finished) && (await run(`return !document.getElementById('summary').hidden`)));
+  check('summary: hide and quit are there', await run(`return document.querySelectorAll('#summary [data-win]').length === 2`));
   check('summary: no box behind the result', await run(`return getComputedStyle(document.getElementById('result')).backgroundColor === 'rgba(0, 0, 0, 0)'`));
 
   ws.close();

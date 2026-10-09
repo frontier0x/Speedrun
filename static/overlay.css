@@ -91,7 +91,7 @@ input, textarea { color: var(--text); background: var(--faint); border-color: tr
 
 /* Hide and quit, top right, only while you hover. */
 /* They sit at the end of the task line, which is under the clock, so they never cover the digits. */
-.head { position: relative; }
+.head, .sum-head { position: relative; }
 .winctl { position: absolute; top: 50%; right: 0; transform: translateY(-50%); display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s; }
 .panel:hover .winctl { opacity: 1; }
 .winctl button {
