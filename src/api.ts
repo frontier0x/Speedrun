@@ -14,6 +14,7 @@ export type Action =
   | { type: 'quickAdd'; text: string }
   | { type: 'addSubtask'; parentId: string; text: string }
   | { type: 'resumeSession' }
+  | { type: 'continueWith'; text: string }
   | { type: 'renameRun'; id: string; name: string }
   | { type: 'import'; text: string }
   | { type: 'importFile' }

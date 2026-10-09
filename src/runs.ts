@@ -53,6 +53,8 @@ export interface Settings {
   scale: number;
   /** The first-start tips have been seen. */
   onboarded: boolean;
+  /** We've turned on "Open at login" once, on first start; after that it's yours to switch. */
+  loginItemSet?: boolean;
   overlayBounds?: { x: number; y: number; width: number; height: number };
 }
 

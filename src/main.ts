@@ -98,6 +98,19 @@ async function act(a: Action) {
         finished = null;
       }
       break;
+    case 'continueWith': {
+      // From the summary: the session carries on with a new task, on the clock right away.
+      const q = parseQuickAdd(a.text);
+      if (!q) break;
+      if (finished) {
+        run = finished;
+        run.endedAt = undefined;
+        finished = null;
+      }
+      addTasks(ensureRun(), [q.task]);
+      startTask(run!, q.task.id, now);
+      break;
+    }
     case 'renameRun': {
       // The live session renames in place; a past one is renamed on disk.
       const name = a.name.trim();
@@ -284,11 +297,11 @@ function openDashboard() {
     return;
   }
   dashboard = new BrowserWindow({
-    width: 1100,
-    height: 760,
-    minWidth: 760,
-    minHeight: 520,
-    title: 'Speedrun',
+    width: 480,
+    height: 780,
+    minWidth: 380,
+    minHeight: 480,
+    title: 'Speedrun Stats',
     titleBarStyle: 'hiddenInset',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#fbfbf8',
     webPreferences: { preload, contextIsolation: true, sandbox: true },
@@ -375,6 +388,13 @@ app.whenReady().then(async () => {
   // No Dock icon, so the panel can float over full-screen apps; the menu bar icon is the way in.
   app.dock?.hide();
   settings = await runStore.loadSettings();
+  // Installed means it's in the menu bar: start at login, once, by default. The menu bar icon's
+  // "Open at login" turns it off again.
+  if (!settings.loginItemSet && app.isPackaged) {
+    app.setLoginItemSettings({ openAtLogin: true });
+    settings = { ...settings, loginItemSet: true };
+    persistSettings();
+  }
   settings.scale = clampScale(settings.scale);
   nativeTheme.themeSource = settings.theme;
   pastRuns = await runStore.list();

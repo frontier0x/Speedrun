@@ -13,8 +13,8 @@ estimates and your best times.
    **Done**, then go to System Settings › Privacy & Security, scroll down and click **Open Anyway**.
    Or run `xattr -dr com.apple.quarantine /Applications/Speedrun.app` once. After that it opens normally.
 
-Speedrun shows a stopwatch icon in the menu bar and the floating timer bar (no Dock icon). Tick **Open at login** in the
-menu bar menu to have it start with your Mac.
+Speedrun shows a stopwatch icon in the menu bar and the floating timer bar (no Dock icon). It starts with
+your Mac by default, so the icon is always there; untick **Open at login** in its menu to stop that.
 
 ## The timer
 
@@ -27,7 +27,7 @@ estimate, red once you're over, grey while paused.
 Under it sits the **session clock**: all the time you've spent on this session's tasks. It is green while
 you're on or under your plan and red once you're behind, with the time saved or lost next to it. When you
 finish the last task or click End session, the panel shows the total time you saved (or lost) against
-your estimates. **Continue with next task** keeps the same session going so you can add another task;
+your estimates. Type another task right there to keep the same session going (its clock starts at once);
 Start a new session starts a fresh list.
 
 The round button next to the clock starts (green) and pauses (red) the task, and stays there when the
@@ -73,9 +73,10 @@ needs no macOS permissions.
 
 ## Stats
 
-Open it from the timer (Stats) or the menu bar. It shows every session with its tasks and subtasks,
-estimates vs. actuals and your best time per task, plus tracked time over the last 14 days, estimate
-accuracy and your streak. Click a session's name to rename it.
+Open it from the timer (Stats) or the menu bar. It looks like the timer and shows time on tasks today
+or this week, time spent in pauses, time saved or lost against your plan, tasks done and your streak,
+plus each of the last 7 days with tasks and pauses stacked. Below that are your sessions: click one to
+see its tasks and subtasks with times and estimates, and click its name to rename it.
 
 ## Shortcuts
 

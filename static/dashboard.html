@@ -3,32 +3,39 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
-  <title>Speedrun</title>
+  <title>Speedrun Stats</title>
   <link rel="stylesheet" href="common.css" />
   <link rel="stylesheet" href="dashboard.css" />
 </head>
 <body>
   <div class="titlebar"></div>
   <main>
-    <section class="hero">
-      <div>
-        <h1>Your sessions</h1>
-        <div class="muted" id="subtitle"></div>
+    <!-- The headline, like the timer's clock: time on tasks for today or this week. -->
+    <section class="overview">
+      <div class="seg" id="period">
+        <button data-v="today" type="button">Today</button>
+        <button data-v="week" type="button">This week</button>
       </div>
-      <div class="tiles" id="tiles"></div>
+      <div class="clock" id="taskTime">0:00:00</div>
+      <div class="caption" id="caption">on tasks today</div>
+      <div class="lines">
+        <div class="line"><span class="label">Pauses</span><span class="spacer"></span><span class="num" id="pauseTime">0:00:00</span></div>
+        <div class="line"><span class="label">Against your plan</span><span class="spacer"></span><span class="num" id="savedTime">–</span></div>
+        <div class="line"><span class="label">Tasks done</span><span class="spacer"></span><span class="num" id="tasksDone">0</span></div>
+        <div class="line"><span class="label">Streak</span><span class="spacer"></span><span class="num" id="streak">0 days</span></div>
+      </div>
     </section>
 
-    <section class="card chart-card">
-      <div class="card-head"><h2>Tracked time, last 14 days</h2></div>
+    <!-- Each day of the last week: time on tasks, with pauses stacked on top. -->
+    <section class="week">
+      <div class="head"><span>Last 7 days</span><span class="spacer"></span>
+        <span class="key"><i class="k-task"></i>Tasks</span><span class="key"><i class="k-pause"></i>Pauses</span></div>
       <div class="chart" id="chart"></div>
     </section>
 
-    <section class="split">
-      <div class="card runs">
-        <div class="card-head"><h2>Sessions</h2></div>
-        <ol id="runs"></ol>
-      </div>
-      <div class="card detail" id="detail"></div>
+    <section class="sessions">
+      <div class="head"><span>Sessions</span></div>
+      <ol class="list" id="sessions"></ol>
     </section>
   </main>
   <div class="tooltip" id="tooltip" hidden></div>
