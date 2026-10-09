@@ -25,6 +25,7 @@ export type Action =
   | { type: 'quickAdd'; text: string; subtask?: boolean }
   | { type: 'indent'; id: string }
   | { type: 'outdent'; id: string }
+  | { type: 'shift'; id: string; dir: -1 | 1 }
   | { type: 'addSubtask'; parentId: string; text: string }
   | { type: 'resumeSession' }
   | { type: 'continueWith'; text: string }

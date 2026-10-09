@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
   addSubtask, addTasks, bestFor, bestIndex, clampScale, completeActive, endPause, formatDuration, formatEstimate, goldSplits, isSection, liveElapsed, matchKey,
-  indentTask, moveTask, newRun, outdentTask, nextTask, pairKey, parseDuration, parseQuickAdd, parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, runFromTemplate, setElapsed,
+  indentTask, moveTask, shiftTask, newRun, outdentTask, nextTask, pairKey, parseDuration, parseQuickAdd, parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, runFromTemplate, setElapsed,
   removeTask, runElapsed, startTask, summarize, templateFromRun, templateFromText, templateRecord, toggleDone, type Best, type Run, type Settings,
   type Template,
 } from './runs.js';
@@ -205,6 +205,9 @@ async function act(a: Action) {
     }
     case 'indent':
       if (run) indentTask(run, a.id, now);
+      break;
+    case 'shift':
+      if (run) shiftTask(run, a.id, a.dir);
       break;
     case 'outdent':
       if (run) outdentTask(run, a.id);

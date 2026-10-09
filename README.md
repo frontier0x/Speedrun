@@ -48,7 +48,9 @@ hex like `#3fd68a` or `#00000080` (the last two digits are opacity), or start fr
 Click the clock to open the rest (drag it to move it). Open, the clock sits on top with the task under it, larger:
 
 - **Shortcuts**: `⌘⇧Space` is go/pause and `⌘⇧↩` is done, from any app.
-- **Your list**: click a task to switch to it, drag to reorder, double-click to rename, click its
+- **Your list** stays in your order: new tasks go at the end and finished ones stay where they are. Select
+  a task (click its row's empty space or use ↑/↓) and press `⌥↑` / `⌥↓` to move it, with its subtasks;
+  `Tab` / `Shift+Tab` nest it. Click a task to switch to it, drag to reorder, double-click to rename, click its
   estimate to change it. Once a task has time on it, its estimate shows how far under (green) or over
   (red) you are, live. Finished tasks show their time and how far under or over the estimate they
   were, in gold if you beat your best time for that task. Estimates: pick 5m to 2h or type any time.
