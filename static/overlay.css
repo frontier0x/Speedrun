@@ -325,5 +325,5 @@ input::-webkit-calendar-picker-indicator { display: none !important; }
 /* Countdown, at the very bottom. */
 .bottom { display: flex; margin-top: -2px; }
 
-/* Folded, the task line already names the task; its group's line only shows when the timer is open. */
-.panel:not(.open) .session.group { display: none; }
+/* Folded, the timer is just the clock and the task with its circle. Group and session lines show open. */
+.panel:not(.open) .face .session { display: none; }

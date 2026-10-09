@@ -66,13 +66,14 @@ try {
   s = await state();
   check('the clock runs', s.run.activeSince !== undefined && (await run(`return document.getElementById('hms').textContent`)) !== '0:00:00');
 
-  const order = await run(`const f = document.getElementById('face'); const y = (id) => document.getElementById(id).getBoundingClientRect().top; return [y('hms') < y('task'), y('task') < y('sessionTime')];`);
-  check('folded: clock, then task, then session', order[0] && order[1]);
-  check('folded: no group line', await run(`return getComputedStyle(document.getElementById('group')).display === 'none'`));
+  const y = (id) => `document.getElementById('${id}').getBoundingClientRect().top`;
+  check('folded: clock, then task', await run(`return ${y('hms')} < ${y('task')}`));
+  check('folded: nothing else (no group or session line)', await run(`return ['group', 'session'].every((id) => getComputedStyle(document.getElementById(id)).display === 'none')`));
 
   await open();
   check('opens on click', await run(`return !document.getElementById('more').hidden`));
-  check('open: the group line shows', await run(`return getComputedStyle(document.getElementById('group')).display !== 'none'`));
+  check('open: group and session lines show', await run(`return ['group', 'session'].every((id) => getComputedStyle(document.getElementById(id)).display !== 'none')`));
+  check('open: task, then session', await run(`return ${y('task')} < ${y('sessionTime')}`));
 
   await run(`const i = document.getElementById('addInput'); i.value = 'Invoices 10m'; document.getElementById('addForm').requestSubmit(); await new Promise(r => setTimeout(r, 300));`);
   s = await state();
