@@ -191,17 +191,21 @@ function renderSummary(run: Run) {
     rank.textContent = bits.join(' · ');
     rank.hidden = !bits.length;
   } else {
-    const [hms, milli] = clockParts(Math.abs(net));
+    // Nothing to compare yet: show how long the session was instead of a meaningless +0:00:00.
+    const [hms, milli] = clockParts(saved ? Math.abs(net) : total);
     $('sumTitle').textContent = 'Session done';
-    $('savedHms').textContent = (net < 0 ? '−' : '+') + hms;
+    $('savedHms').textContent = (saved ? (net < 0 ? '−' : '+') : '') + hms;
     $('savedMs').textContent = milli;
     $('savedClock').className = 'clock ' + (!saved ? 'idle' : net >= 0 ? 'ahead' : 'behind');
     label.className = 'saved-label';
-    label.textContent = !saved
-      ? 'Give tasks an estimate to see how much time you save.'
-      : net >= 0
+    const estimated = run.tasks.some((t) => t.estimateMs !== undefined);
+    label.textContent = saved
+      ? net >= 0
         ? 'saved against your plan'
-        : 'over your plan';
+        : 'over your plan'
+      : estimated
+        ? 'on tasks. Finish a task with an estimate to see what you save.'
+        : 'on tasks. Give tasks an estimate to see what you save.';
   }
   renderMedals(run);
   const tpl = state.templates.find((t) => t.id === run.templateId);
@@ -213,6 +217,9 @@ function renderSummary(run: Run) {
   $('factPaused').textContent = formatDuration(pausedTotal(run));
   $('factPlanned').textContent = saved ? formatDuration(saved.plannedMs) : '–';
   $('factActual').textContent = saved ? formatDuration(saved.actualMs) : '–';
+  // No plan to compare, no Planned/Actual to show.
+  $('factPlanned').parentElement!.hidden = !saved;
+  $('factActual').parentElement!.hidden = !saved;
   $('factTasks').textContent = `${leaves.filter((t) => t.done).length}/${leaves.length}`;
   const tot = state.totals;
   $('totToday').textContent = `${formatDuration(tot.todayMs)} · ${formatDuration(tot.todayPausedMs)} paused`;
@@ -901,8 +908,13 @@ function wire() {
     void api.act({ type: 'saveTemplate', name });
   };
   $('copyBtn').onclick = async () => {
-    const r = $('result').getBoundingClientRect();
+    // The copied picture needs a solid background; only while it's taken, so it doesn't show as a box.
+    const result = $('result');
+    result.classList.add('capturing');
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const r = result.getBoundingClientRect();
     await api.act({ type: 'copyResult', rect: { x: r.x, y: r.y, width: r.width, height: r.height } });
+    result.classList.remove('capturing');
     $('copyBtn').textContent = 'Copied ✓';
     setTimeout(() => ($('copyBtn').textContent = 'Copy'), 1500);
   };
