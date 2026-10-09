@@ -22,7 +22,9 @@ export interface AppState {
 }
 
 export type Action =
-  | { type: 'quickAdd'; text: string }
+  | { type: 'quickAdd'; text: string; subtask?: boolean }
+  | { type: 'indent'; id: string }
+  | { type: 'outdent'; id: string }
   | { type: 'addSubtask'; parentId: string; text: string }
   | { type: 'resumeSession' }
   | { type: 'continueWith'; text: string }

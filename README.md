@@ -45,13 +45,17 @@ bigger or smaller.
 the clock shows milliseconds and seconds, and every color. Each color can be solid or a gradient; type any
 hex like `#3fd68a` or `#00000080` (the last two digits are opacity), or start from a preset.
 
-Click the clock to open the rest (drag it to move it):
+Click the clock to open the rest (drag it to move it). Open, the clock sits on top with the task under it, larger:
 
 - **Shortcuts**: `⌘⇧Space` is go/pause and `⌘⇧↩` is done, from any app.
 - **Your list**: click a task to switch to it, drag to reorder, double-click to rename, click its
-  estimate to change it. Finished tasks show their time and how far under or over the estimate they
+  estimate to change it. Once a task has time on it, its estimate shows how far under (green) or over
+  (red) you are, live. Finished tasks show their time and how far under or over the estimate they
   were, in gold if you beat your best time for that task. Estimates: pick 5m to 2h or type any time.
-- **Subtasks**: hover a task and click **+**. A task with subtasks shows their total time, how many are
+- **Subtasks**: press **Tab** in the add field and what you type becomes a subtask of the last task;
+  **Shift-Tab** makes it a task again. Renaming a task (double-click) works the same way, or hover a task
+  and click **+**. Tasks and subtasks are the two levels. Drag a task to move it; its subtasks move with
+  it, and dropping a task on a subtask puts it in that group. A task with subtasks shows their total time, how many are
   done and the sum of their estimates (or its own estimate, if you give it one). While you work on a
   subtask, the folded timer shows its task's total time and what's left under the clock. Ticking the
   task ticks all its subtasks. Time saved counts the subtask estimates, or the task's own if its

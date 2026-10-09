@@ -5,7 +5,7 @@ import {
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
   pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate, parseTimeInput, reopenTask, setElapsed,
   addSubtask, toggleDone, ancestorsOf, matchKey, similarity, templateFromRun, runFromTemplate, templateRecord, templateToText,
-  templateFromText, bestFor, bestIndex, pbPace, medal, pairKey, type Run,
+  templateFromText, indentTask, outdentTask, bestFor, bestIndex, pbPace, medal, pairKey, type Run,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -257,4 +257,27 @@ test('free tasks race a similar name unless you said it is not the same task', (
   assert.equal(medal(t, undefined), 'bronze');
   assert.equal(medal({ ...t, elapsedMs: 25 * MIN }, undefined), 'silver');
   assert.equal(medal({ ...t, elapsedMs: 25 * MIN }, { ms: 26 * MIN, from: '', at: '', key: '', fuzzy: false }), 'gold');
+});
+
+test('Tab and Shift-Tab make a task a subtask and back; moving keeps two levels', () => {
+  const run = addTasks(newRun('manual'), parseTaskList('- Page\n  - Hero\n- Emails\n- Invoice'));
+  const titles = () => run.tasks.map((t) => (t.parentId ? '>' : '') + t.title).join(',');
+  const [page, hero, emails, invoice] = run.tasks;
+  indentTask(run, emails.id);
+  assert.equal(titles(), 'Page,>Hero,>Emails,Invoice');
+  outdentTask(run, emails.id);
+  assert.equal(titles(), 'Page,>Hero,Emails,Invoice');
+  indentTask(run, page.id);
+  assert.equal(titles(), 'Page,>Hero,Emails,Invoice', 'the first task has nothing above it');
+  // Dropped on a subtask, a plain task joins that group; a task with subtasks stays a task.
+  moveTask(run, invoice.id, hero.id);
+  assert.equal(titles(), 'Page,>Invoice,>Hero,Emails');
+  indentTask(run, emails.id);
+  moveTask(run, page.id, emails.id);
+  assert.equal(titles(), 'Page,>Invoice,>Hero,>Emails', 'a task can not go under its own subtask');
+  // The clock moves off a task that gets subtasks.
+  const r2 = addTasks(newRun('manual'), parseTaskList('- A\n- B'));
+  startTask(r2, r2.tasks[0].id, 0);
+  indentTask(r2, r2.tasks[1].id, MIN);
+  assert.equal(r2.activeTaskId, r2.tasks[1].id);
 });
