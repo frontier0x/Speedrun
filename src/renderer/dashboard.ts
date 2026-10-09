@@ -204,7 +204,7 @@ function renderDetail() {
   box.append(stats);
 
   if (!run.tasks.length) {
-    box.append(el('div', 'empty', 'No tasks in this run.'));
+    box.append(el('div', 'empty', 'No tasks in this session.'));
     return;
   }
 

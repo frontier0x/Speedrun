@@ -1,8 +1,8 @@
 # Speedrun
 
 Speedrun your day. A local-first, open-source menu-bar app that times your work the way speedrunners
-time a run: tasks are splits, sections roll up their splits, and you race your own estimates and your
-best times.
+time a run. You work in **sessions**; a session is a list of **tasks**, and a task can have **subtasks**.
+You race your own estimates and your best times.
 
 ## Install
 
@@ -58,8 +58,7 @@ Click the clock to open the rest (drag it to move it):
   subtasks have none.
 - **Add a task** one at a time (`Write copy 30m` sets a 30-minute estimate, a leading `!` puts it on
   top), or **Paste a list**: bullets, checkboxes, `#` headings and indentation become tasks and
-  sections, and `30m`, `~30m`, `(1h)` or `[45m]` become estimates.
-- **End run** saves the run, so the next task starts a fresh one.
+  subtasks, and `30m`, `~30m`, `(1h)` or `[45m]` become estimates.
 
 Speedrun doesn't watch your screen, read your apps or send anything anywhere. It's just a timer, and it
 needs no macOS permissions.
@@ -79,15 +78,13 @@ personal bests added up), plus tracked time over the last 14 days, estimate accu
 Click a session's name to rename it.
 
 A **personal best** (gold, ★) means you finished a task faster than ever before under the same name.
-Speedrunners call each part of a run a "split" and a new personal best on one a "gold split"; that's
-where the idea comes from.
 
 ## Shortcuts
 
 | Shortcut | Action |
 | --- | --- |
 | `⌘⇧Space` | Go / Pause, from any app |
-| `⌘⇧↩` | Split: finish the current task, start the next |
+| `⌘⇧↩` | Done: finish the current task, start the next |
 | `⌘⇧N` | Add a task |
 | `⌥⇧⌘Space` | Show or hide the timer |
 
@@ -104,7 +101,7 @@ npm start
 
 Everything stays on your Mac in `~/Library/Application Support/speedrun/`:
 
-- `runs/YYYY-MM-DD/run-*.json`: your task runs
+- `runs/YYYY-MM-DD/run-*.json`: your sessions, with their tasks and subtasks
 - `settings.json`: color, opacity and timer position
 
 ## Roadmap
