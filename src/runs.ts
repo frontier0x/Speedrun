@@ -529,6 +529,17 @@ function reparented(run: Run, t: Task, now = Date.now()) {
   parent.doneAt = undefined;
 }
 
+/** ⌥↑ / ⌥↓: swaps a task, with its subtasks, with the one above or below at the same level. */
+export function shiftTask(run: Run, id: string, dir: -1 | 1): Run {
+  const t = run.tasks.find((x) => x.id === id);
+  if (!t) return run;
+  const sibs = run.tasks.filter((x) => (x.parentId ?? null) === (t.parentId ?? null));
+  const other = sibs[sibs.indexOf(t) + dir];
+  if (!other) return run;
+  const [first, second] = dir < 0 ? [t, other] : [other, t];
+  return moveTask(run, first.id, second.id);
+}
+
 /** Tab: a task becomes a subtask of the task above it. Only tasks without subtasks of their own can. */
 export function indentTask(run: Run, id: string, now = Date.now()): Run {
   const t = run.tasks.find((x) => x.id === id);

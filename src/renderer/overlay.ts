@@ -278,14 +278,16 @@ let dragId: string | null = null;
 
 function renderList() {
   const list = $('list');
+  // Moving a task with the keyboard redraws the list; keep the focus on it, but only if it was there.
+  const hadFocus = list.contains(document.activeElement);
   list.replaceChildren();
   const run = state.run;
   if (!run || !run.tasks.length) return;
   const current = currentTask();
-  const finished = (t: Task) => (isSection(run, t) ? isSectionDone(run, t) : t.done);
-  // Up next in priority order, finished ones underneath; subtasks sit under their task, indented.
+  // Your order, top to bottom: new tasks go at the end and finished ones stay where they are.
+  // Subtasks sit under their task, indented.
   const add = (tasks: Task[], depth: number) => {
-    for (const t of [...tasks.filter((x) => !finished(x)), ...tasks.filter(finished)]) {
+    for (const t of tasks) {
       list.append(row(run, t, t === current, depth));
       if (pickerFor === t.id) {
         const li = el('li', 'row-picker');
@@ -301,6 +303,7 @@ function renderList() {
     }
   };
   add(run.tasks.filter((t) => !t.parentId || !run.tasks.some((p) => p.id === t.parentId)), 0);
+  if (hadFocus && focusId) list.querySelector<HTMLElement>(`li[data-id="${focusId}"]`)?.focus();
 }
 
 /** Type a subtask and hit Enter; the field stays open for the next one. */
@@ -381,7 +384,28 @@ function groupRow(run: Run, t: Task, depth: number): HTMLLIElement {
 }
 
 /** Drag a task to move it, its subtasks come along; drop it on a subtask to make it one. */
+let focusId: string | null = null; // the task you're moving with the keyboard, focused again after a redraw
+
 function draggable(li: HTMLLIElement, t: Task) {
+  // Keyboard: select a task, then ⌥↑ / ⌥↓ moves it (with its subtasks), Tab / Shift+Tab nests it,
+  // ↑ / ↓ go to the task above or below, Enter works like a click.
+  li.tabIndex = 0;
+  li.dataset.id = t.id;
+  li.addEventListener('focus', () => (focusId = t.id));
+  li.addEventListener('keydown', (e) => {
+    if (e.target !== li) return;
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      void api.act({ type: 'shift', id: t.id, dir: e.key === 'ArrowUp' ? -1 : 1 });
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const rows = [...$('list').querySelectorAll<HTMLElement>('li[data-id]')];
+      rows[rows.indexOf(li) + (e.key === 'ArrowUp' ? -1 : 1)]?.focus();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      void api.act({ type: e.shiftKey ? 'outdent' : 'indent', id: t.id });
+    } else if (e.key === 'Enter') li.click();
+  });
   li.draggable = true;
   li.ondragstart = (e) => {
     e.stopPropagation();

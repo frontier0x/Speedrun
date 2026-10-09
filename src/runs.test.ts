@@ -5,7 +5,7 @@ import {
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
   pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate, parseTimeInput, reopenTask, setElapsed,
   addSubtask, toggleDone, ancestorsOf, matchKey, similarity, templateFromRun, runFromTemplate, templateRecord, templateToText,
-  templateFromText, indentTask, outdentTask, bestFor, bestIndex, pbPace, medal, pairKey, type Run,
+  templateFromText, indentTask, outdentTask, bestFor, bestIndex, pbPace, medal, pairKey, type Run, shiftTask,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -280,4 +280,19 @@ test('Tab and Shift-Tab make a task a subtask and back; moving keeps two levels'
   startTask(r2, r2.tasks[0].id, 0);
   indentTask(r2, r2.tasks[1].id, MIN);
   assert.equal(r2.activeTaskId, r2.tasks[1].id);
+});
+
+test('⌥↑ and ⌥↓ move a task with its subtasks past the next task at its level', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- Page\n  - Hero\n  - Pricing\n- Copy\n  - Headline\n- Emails'));
+  const [page, hero, , copy] = run.tasks;
+  const titles = () => run.tasks.map((t) => t.title).join(',');
+  shiftTask(run, copy.id, -1);
+  assert.equal(titles(), 'Copy,Headline,Page,Hero,Pricing,Emails');
+  shiftTask(run, page.id, 1);
+  assert.equal(titles(), 'Copy,Headline,Emails,Page,Hero,Pricing');
+  shiftTask(run, hero.id, 1); // subtasks move within their task
+  assert.equal(titles(), 'Copy,Headline,Emails,Page,Pricing,Hero');
+  shiftTask(run, copy.id, -1); // already first: nothing happens
+  assert.equal(titles(), 'Copy,Headline,Emails,Page,Pricing,Hero');
 });
