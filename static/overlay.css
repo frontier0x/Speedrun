@@ -282,3 +282,21 @@ button.text:hover { color: var(--clock); background: none; }
 input::-webkit-calendar-picker-indicator { display: none !important; }
 .mode-row .race:not([hidden]) ~ .spacer { display: none; }
 .delta:empty { display: none; }
+
+/* ---------- open: the clock on top, the task under it, then the session ---------- */
+.panel.open .face { display: flex; flex-direction: column; padding-top: 18px; }
+.panel.open .winctl { top: 4px; }
+.panel.open .clock-row { order: 0; }
+.panel.open .head { order: 1; margin-top: 2px; gap: 8px; }
+.panel.open .head .task { font-size: 16px; font-weight: 600; padding-right: 0; line-height: 1.3; }
+.panel.open .head .tick { width: 15px; height: 15px; }
+.panel.open .session.group { order: 2; margin-top: 6px; }
+.panel.open .session:not(.group) { order: 3; }
+
+/* How far under or over its estimate a task is, right by it in the list. */
+.list .est.live { font-family: var(--digits); font-variant-numeric: tabular-nums; border-color: transparent; background: var(--faint); }
+.list .est.live.ahead { color: var(--ahead); }
+.list .est.live.behind { color: var(--behind); }
+
+/* Tabbed in: what you type becomes a subtask. */
+.add.indent { padding-left: 18px; }

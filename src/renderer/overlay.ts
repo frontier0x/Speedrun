@@ -19,7 +19,15 @@ let subFor: string | null = null; // task whose "add a subtask" field is open in
 /** For a moment after you tick a task off, its result stands where the task name is. */
 let flash: { text: string; tone: string; until: number } | null = null;
 let savedTemplateFor: string | null = null; // the finished session you just saved as a template
+let addIndent = false; // the add field is tabbed in: new tasks become subtasks of the last task
 
+/** Tabs the add field in or out. In only works under a task. */
+function setIndent(on: boolean) {
+  const last = state.run?.tasks.filter((t) => !t.parentId).at(-1);
+  addIndent = on && Boolean(last);
+  $('addForm').classList.toggle('indent', addIndent);
+  $<HTMLInputElement>('addInput').placeholder = addIndent && last ? `Subtask of ${last.title}, e.g. Hero 20m` : 'Add a task, e.g. Write copy 30m';
+}
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -241,6 +249,7 @@ function renderControls() {
   sw.classList.toggle('on', state.settings.countdown);
   sw.setAttribute('aria-checked', String(state.settings.countdown));
   $('endBtn').hidden = !state.run;
+  if (document.activeElement?.id !== 'addInput' || !state.run) setIndent(addIndent);
   // An empty session: your templates, one click to start.
   const chips = $('tplChips');
   const empty = !state.run?.tasks.length;
@@ -325,6 +334,18 @@ function subtaskField(parent: Task, depth: number): HTMLLIElement {
       editing = false;
       render();
     }
+    // Shift-Tab: back to plain tasks, in the add field at the bottom.
+    if (k.key === 'Tab' && k.shiftKey) {
+      k.preventDefault();
+      const text = input.value;
+      subFor = null;
+      editing = false;
+      setIndent(false);
+      render();
+      const add = $<HTMLInputElement>('addInput');
+      add.value = text;
+      add.focus();
+    }
   };
   li.append(input);
   queueMicrotask(() => input.focus());
@@ -353,15 +374,52 @@ function groupRow(run: Run, t: Task, depth: number): HTMLLIElement {
   if (done && est !== undefined) {
     const d = totalElapsed(run, t) - est;
     li.append(el('span', 'num ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
-  } else li.append(estimateButton(t, est));
+  } else li.append(estimateButton(t, est, totalElapsed(run, t)));
   li.append(subtaskButton(t), removeButton(t));
+  draggable(li, t);
   return li;
 }
 
-function estimateButton(t: Task, est = t.estimateMs): HTMLButtonElement {
-  const b = el('button', 'est' + (t.estimateMs === undefined && est !== undefined ? ' summed' : ''), est !== undefined ? formatEstimate(est) : 'estimate');
+/** Drag a task to move it, its subtasks come along; drop it on a subtask to make it one. */
+function draggable(li: HTMLLIElement, t: Task) {
+  li.draggable = true;
+  li.ondragstart = (e) => {
+    e.stopPropagation();
+    dragId = t.id;
+  };
+  li.ondragend = () => (dragId = null);
+  li.ondragover = (e) => {
+    e.preventDefault();
+    li.classList.add('drop');
+  };
+  li.ondragleave = () => li.classList.remove('drop');
+  li.ondrop = (e) => {
+    e.preventDefault();
+    li.classList.remove('drop');
+    if (dragId && dragId !== t.id) void api.act({ type: 'move', id: dragId, beforeId: t.id });
+  };
+}
+
+/** Under the task's estimate while it runs: how far under (green) or over (red) it is. */
+function liveDelta(spent: number, est: number): { text: string; tone: string } {
+  const d = spent - est;
+  return { text: formatDuration(d, { signed: true }), tone: d <= 0 ? 'ahead' : 'behind' };
+}
+
+/** The estimate; once the task has time on it, how far under or over it is, live. Click to change it. */
+function estimateButton(t: Task, est = t.estimateMs, spent = 0): HTMLButtonElement {
+  const summed = t.estimateMs === undefined && est !== undefined;
+  const b = el('button', 'est' + (summed ? ' summed' : ''), est !== undefined ? formatEstimate(est) : 'estimate');
   b.type = 'button';
-  b.title = t.estimateMs === undefined && est !== undefined ? 'The sum of its subtasks. Click to set one for the whole task.' : 'How long do you think this takes?';
+  b.title = summed ? 'The sum of its subtasks. Click to set one for the whole task.' : 'How long do you think this takes?';
+  if (est !== undefined && spent >= 1000) {
+    const d = liveDelta(spent, est);
+    b.textContent = d.text;
+    b.classList.add('live', d.tone);
+    b.dataset.delta = t.id;
+    b.dataset.est = String(est);
+    b.title = `Against your ${formatEstimate(est)} estimate. Click to change it.`;
+  }
   b.onclick = (e) => {
     e.stopPropagation();
     pickerFor = pickerFor === t.id ? null : t.id;
@@ -429,6 +487,12 @@ function row(run: Run, t: Task, current: boolean, depth: number): HTMLLIElement 
     input.onkeydown = (k) => {
       if (k.key === 'Enter') finish(true);
       if (k.key === 'Escape') finish(false);
+      // Tab makes it a subtask of the task above, Shift-Tab a task again.
+      if (k.key === 'Tab') {
+        k.preventDefault();
+        finish(true);
+        void api.act({ type: k.shiftKey ? 'outdent' : 'indent', id: t.id });
+      }
     };
     input.onblur = () => finish(true);
   };
@@ -444,12 +508,14 @@ function row(run: Run, t: Task, current: boolean, depth: number): HTMLLIElement 
       const d = t.elapsedMs - t.estimateMs;
       li.append(el('span', 'num ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
     }
-    li.append(subtaskButton(t));
+    if (!t.parentId) li.append(subtaskButton(t));
     li.title = 'Click to pick this task back up';
     li.onclick = () => void api.act({ type: 'reopen', id: t.id });
   } else {
     if (spent >= 1000 || current) li.append(timeCell(t, spent, 'num'));
-    li.append(estimateButton(t), subtaskButton(t));
+    li.append(estimateButton(t, t.estimateMs, spent));
+    // Tasks and subtasks: two levels are enough.
+    if (!t.parentId) li.append(subtaskButton(t));
     // Click a task to work on it; click the current one while paused to carry on.
     const runningThis = current && isRunning();
     li.title = runningThis ? '' : current ? 'Click to carry on' : 'Click to switch to this task';
@@ -457,20 +523,7 @@ function row(run: Run, t: Task, current: boolean, depth: number): HTMLLIElement 
   }
 
   li.append(removeButton(t));
-
-  li.draggable = true;
-  li.ondragstart = () => (dragId = t.id);
-  li.ondragend = () => (dragId = null);
-  li.ondragover = (e) => {
-    e.preventDefault();
-    li.classList.add('drop');
-  };
-  li.ondragleave = () => li.classList.remove('drop');
-  li.ondrop = (e) => {
-    e.preventDefault();
-    li.classList.remove('drop');
-    if (dragId && dragId !== t.id) void api.act({ type: 'move', id: dragId, beforeId: t.id });
-  };
+  draggable(li, t);
   return li;
 }
 
@@ -592,6 +645,13 @@ function frame() {
         const g = run?.tasks.find((x) => x.id === c.dataset.group);
         if (run && g) c.textContent = formatDuration(totalElapsed(run, g));
       }
+      for (const c of document.querySelectorAll<HTMLElement>('.list [data-delta]')) {
+        const task = run?.tasks.find((x) => x.id === c.dataset.delta);
+        if (!run || !task) continue;
+        const d = liveDelta(isSection(run, task) ? totalElapsed(run, task) : liveElapsed(run, task), Number(c.dataset.est));
+        c.textContent = d.text;
+        c.className = 'est live ' + d.tone;
+      }
       // Times in the list tick along too.
       for (const c of document.querySelectorAll<HTMLElement>('.list [data-time]')) {
         const task = run?.tasks.find((x) => x.id === c.dataset.time);
@@ -601,10 +661,8 @@ function frame() {
       const race = $('race');
       const pace = state.settings.race && run && state.record?.pb ? pbPace(run, state.record.pb.tasks) : undefined;
       let html = '';
-      if (best) {
-        const d = best.ms - ms;
-        html = `Best ${formatDuration(best.ms)} · ` + (d >= 0 ? `<span class="ahead">${formatDuration(d)} left</span>` : `<span class="behind">${formatDuration(-d)} over</span>`);
-      }
+      // The clock's color says whether you're beating it; how far under or over sits by the task in the list.
+      if (best) html = `Best ${formatDuration(best.ms)}`;
       if (pace !== undefined) html += (html ? ' · ' : '') + `PB <span class="${pace <= 0 ? 'ahead' : 'behind'}">${formatDuration(pace, { signed: true })}</span>`;
       if (html !== raceHtml) {
         raceHtml = html;
@@ -616,15 +674,6 @@ function frame() {
             (best.fuzzy ? `. Matched a similar task (“${best.key}”): click if it's not the same.` : '')
           : 'Against your fastest run of this template';
       }
-      const delta = $('delta');
-      if (html) delta.textContent = '';
-      else if (t?.estimateMs !== undefined && ms > 0) {
-        const d = t.estimateMs - ms;
-        // Counting down, the clock already shows what's left, so say how long it's been instead.
-        if (state.settings.countdown) delta.textContent = `${formatDuration(ms)} in`;
-        else delta.textContent = d >= 0 ? `${formatDuration(d)} left` : `${formatDuration(-d)} over`;
-        delta.className = 'delta ' + (d >= 0 ? 'ahead' : 'behind');
-      } else delta.textContent = '';
     }
   }
   requestAnimationFrame(frame);
@@ -736,9 +785,15 @@ function wire() {
   $('addForm').onsubmit = (e) => {
     e.preventDefault();
     const input = $<HTMLInputElement>('addInput');
-    if (input.value.trim()) void api.act({ type: 'quickAdd', text: input.value });
+    if (input.value.trim()) void api.act({ type: 'quickAdd', text: input.value, subtask: addIndent });
     input.value = '';
   };
+  // Tab: what you type becomes a subtask of the last task. Shift-Tab: a task again.
+  $('addInput').addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+    setIndent(!e.shiftKey);
+  });
 
   const paste = $('paste');
   $('pasteBtn').onclick = () => {

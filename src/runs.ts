@@ -494,14 +494,67 @@ export function removeTask(run: Run, id: string, now = Date.now()): Run {
   return run;
 }
 
-/** Moves a task (with its subtasks) to sit before `beforeId`, or to the end. Keeps its parent. */
+/**
+ * Moves a task, with its subtasks, to sit before `beforeId` (or to the end). Dropped on a task, it joins
+ * that task's level: a plain task dropped on a subtask becomes a subtask of the same task. Tasks and
+ * subtasks are the only two levels, so a task with subtasks stays a task.
+ */
 export function moveTask(run: Run, id: string, beforeId: string | null): Run {
-  const block = new Set([id]);
-  for (const t of run.tasks) if (t.parentId && block.has(t.parentId)) block.add(t.id);
-  const moving = run.tasks.filter((t) => block.has(t.id));
-  const rest = run.tasks.filter((t) => !block.has(t.id));
-  const at = beforeId ? rest.findIndex((t) => t.id === beforeId) : -1;
+  const t = run.tasks.find((x) => x.id === id);
+  if (!t) return run;
+  const block = new Set([id, ...descendantsOf(run, id).map((d) => d.id)]);
+  if (beforeId && block.has(beforeId)) return run;
+  let before = beforeId ? run.tasks.find((x) => x.id === beforeId) : undefined;
+  if (before?.parentId && isSection(run, t)) before = run.tasks.find((x) => x.id === before!.parentId);
+  const moving = run.tasks.filter((x) => block.has(x.id));
+  const rest = run.tasks.filter((x) => !block.has(x.id));
+  const oldParent = t.parentId;
+  t.parentId = before ? before.parentId : undefined;
+  const at = before ? rest.indexOf(before) : -1;
   run.tasks = at < 0 ? [...rest, ...moving] : [...rest.slice(0, at), ...moving, ...rest.slice(at)];
+  if (oldParent !== t.parentId) reparented(run, t);
+  return run;
+}
+
+/** After a task changes level: a new parent that was on the clock hands it to its first open subtask. */
+function reparented(run: Run, t: Task, now = Date.now()) {
+  const parent = run.tasks.find((x) => x.id === t.parentId);
+  if (!parent || run.activeTaskId !== parent.id) return;
+  const running = run.activeSince !== undefined;
+  stopClock(run, now);
+  const first = descendantsOf(run, parent.id).find((d) => !d.done && !isSection(run, d));
+  run.activeTaskId = first?.id;
+  if (running && first) run.activeSince = now;
+  parent.done = false;
+  parent.doneAt = undefined;
+}
+
+/** Tab: a task becomes a subtask of the task above it. Only tasks without subtasks of their own can. */
+export function indentTask(run: Run, id: string, now = Date.now()): Run {
+  const t = run.tasks.find((x) => x.id === id);
+  if (!t || t.parentId || isSection(run, t)) return run;
+  const roots = run.tasks.filter((x) => !x.parentId);
+  const above = roots[roots.indexOf(t) - 1];
+  if (!above) return run;
+  // It goes last among the subtasks of the task above.
+  run.tasks = run.tasks.filter((x) => x !== t);
+  const block = [above, ...descendantsOf(run, above.id)];
+  run.tasks.splice(Math.max(...block.map((b) => run.tasks.indexOf(b))) + 1, 0, t);
+  t.parentId = above.id;
+  if (!t.done) above.done = false;
+  reparented(run, t, now);
+  return run;
+}
+
+/** Shift-Tab: a subtask becomes a task again, right after the task it was under. */
+export function outdentTask(run: Run, id: string): Run {
+  const t = run.tasks.find((x) => x.id === id);
+  const parent = t && run.tasks.find((x) => x.id === t.parentId);
+  if (!t || !parent) return run;
+  run.tasks = run.tasks.filter((x) => x !== t);
+  const block = [parent, ...descendantsOf(run, parent.id)];
+  run.tasks.splice(Math.max(...block.map((b) => run.tasks.indexOf(b))) + 1, 0, t);
+  t.parentId = parent.parentId;
   return run;
 }
 

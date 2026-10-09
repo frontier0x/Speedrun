@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
   addSubtask, addTasks, bestFor, bestIndex, clampScale, completeActive, endPause, formatDuration, formatEstimate, goldSplits, isSection, liveElapsed, matchKey,
-  moveTask, newRun, nextTask, pairKey, parseDuration, parseQuickAdd, parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, runFromTemplate, setElapsed,
+  indentTask, moveTask, newRun, outdentTask, nextTask, pairKey, parseDuration, parseQuickAdd, parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, runFromTemplate, setElapsed,
   removeTask, runElapsed, startTask, summarize, templateFromRun, templateFromText, templateRecord, toggleDone, type Best, type Run, type Settings,
   type Template,
 } from './runs.js';
@@ -195,9 +195,20 @@ async function act(a: Action) {
   switch (a.type) {
     case 'quickAdd': {
       const q = parseQuickAdd(a.text);
-      if (q) addTasks(ensureRun(), [q.task], q.urgent);
+      if (!q) break;
+      const r = ensureRun();
+      // Tabbed in: a subtask of the last task in the list.
+      const parent = a.subtask ? r.tasks.filter((t) => !t.parentId).at(-1) : undefined;
+      if (parent) addSubtask(r, parent.id, q.task, now);
+      else addTasks(r, [q.task], q.urgent);
       break;
     }
+    case 'indent':
+      if (run) indentTask(run, a.id, now);
+      break;
+    case 'outdent':
+      if (run) outdentTask(run, a.id);
+      break;
     case 'addSubtask': {
       const q = parseQuickAdd(a.text);
       if (run && q) addSubtask(run, a.parentId, q.task, now);
