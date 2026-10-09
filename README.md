@@ -27,12 +27,16 @@ estimate, red once you're over, grey while paused.
 Under it sits the **session clock**: all the time you've spent on this session's tasks. It is green while
 you're on or under your plan and red once you're behind, with the time saved or lost next to it. When you
 finish the last task or click End session, the panel shows the total time you saved (or lost) against
-your estimates, then New session starts a fresh list.
+your estimates. **Continue with next task** keeps the same session going so you can add another task;
+Start a new session starts a fresh list.
 
-Pausing stops both clocks and counts the pause; the summary shows how long you paused. Under Settings in
-the open panel you can turn on **Countdown** (the task clock counts down from your estimate, then into
-the red with a minus) and **Count pauses in the session** (off by default, so pauses don't add to the
-session time).
+The round button next to the clock starts (green) and pauses (red) the task, and stays there when the
+timer is folded. The circle next to the task name finishes it and shows the next one.
+
+Pausing stops both clocks and counts the pause; the summary shows how long you paused. The **Countdown**
+switch in the open panel makes the task clock count down from your estimate, then into the red with a
+minus. Settings has **Count pauses in the session** (off by default, so pauses don't add to the session
+time).
 
 Hover the timer for **–** (hide to the menu bar) and **×** (quit). Drag its bottom-right corner to make it
 bigger or smaller.
@@ -43,12 +47,15 @@ hex like `#3fd68a` or `#00000080` (the last two digits are opacity), or start fr
 
 Click the clock to open the rest (drag it to move it):
 
-- **Estimate**: pick 5m, 10m, 15m, 25m, 45m, 1h, 1h30m or 2h, or type any time. The panel shows how much
-  is left or how far over you are.
-- **Start / Pause** (`⌘⇧Space`) and **Done**. Done (`⌘⇧↩`) finishes the task and starts the next one.
+- **Shortcuts**: `⌘⇧Space` is go/pause and `⌘⇧↩` is done, from any app.
 - **Your list**: click a task to switch to it, drag to reorder, double-click to rename, click its
   estimate to change it. Finished tasks show their time and how far under or over the estimate they
-  were, in gold if you beat your best time for that task.
+  were, in gold if you beat your best time for that task. Estimates: pick 5m to 2h or type any time.
+- **Subtasks**: hover a task and click **+**. A task with subtasks shows their total time, how many are
+  done and the sum of their estimates (or its own estimate, if you give it one). While you work on a
+  subtask, the folded timer shows its task's total time and what's left under the clock. Ticking the
+  task ticks all its subtasks. Time saved counts the subtask estimates, or the task's own if its
+  subtasks have none.
 - **Add a task** one at a time (`Write copy 30m` sets a 30-minute estimate, a leading `!` puts it on
   top), or **Paste a list**: bullets, checkboxes, `#` headings and indentation become tasks and
   sections, and `30m`, `~30m`, `(1h)` or `[45m]` become estimates.

@@ -1,7 +1,7 @@
 import type { AppState, SpeedrunApi } from '../api.js';
 import {
-  formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, pausedTotal, sessionElapsed, taskKey, timeSaved,
-  type Run, type Task,
+  ancestorsOf, childrenOf, formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, pausedTotal, sessionElapsed, taskKey,
+  timeSaved, totalElapsed, totalEstimate, type Run, type Task,
 } from '../runs.js';
 import { palette, paletteVars, paintSolid, resolveMode } from '../theme.js';
 
@@ -14,6 +14,7 @@ let state: AppState;
 let golds = new Map<string, number>();
 let editing = false; // hold list re-renders while an inline editor is open
 let pickerFor: string | null = null; // task whose estimate picker is open in the list
+let subFor: string | null = null; // task whose "add a subtask" field is open in the list
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -113,10 +114,21 @@ function estimatePicker(t: Task, onDone: () => void): HTMLElement {
 // ---------- face ----------
 
 function renderFace() {
+  const run = state.run;
   const t = currentTask();
   const task = $('task');
-  task.textContent = t ? t.title : state.run?.tasks.length ? 'All done. GG.' : 'Click to add your first task';
+  task.replaceChildren();
+  // A subtask shows where it sits: "Build page › Hero".
+  if (run && t) for (const a of ancestorsOf(run, t)) task.append(el('span', 'crumb', a.title + ' › '));
+  task.append(t ? t.title : run?.tasks.length ? 'All done. GG.' : 'Click to add your first task');
   task.className = 'task' + (t ? '' : ' empty');
+  $('tick').hidden = !t;
+  $('go').hidden = !t;
+  $('go').classList.toggle('running', isRunning());
+  $('go').title = isRunning() ? 'Pause (⌘⇧Space)' : 'Go (⌘⇧Space)';
+  const parent = run && t ? ancestorsOf(run, t).at(-1) : undefined;
+  $('group').hidden = !parent;
+  if (parent) $('groupName').textContent = parent.title;
 }
 
 // ---------- summary ----------
@@ -146,28 +158,13 @@ function renderSummary(run: Run) {
 // ---------- more ----------
 
 function renderControls() {
-  const t = currentTask();
-  const running = isRunning();
-
-  const est = $('estimate');
-  est.hidden = !t;
-  est.textContent = t?.estimateMs !== undefined ? `Estimate ${formatEstimate(t.estimateMs)}` : 'Set an estimate';
-  est.className = 'estimate' + (t?.estimateMs !== undefined ? '' : ' unset');
-
-  const picker = $('picker');
-  if (!picker.hidden && t && !editing) picker.replaceChildren(...estimatePicker(t, closePicker).childNodes);
-  if (!t) picker.hidden = true;
-
-  const play = $<HTMLButtonElement>('play');
-  play.textContent = running ? 'Pause' : 'Start';
-  play.className = 'act' + (running ? '' : ' primary');
-  // Nothing to time yet: the add field is the only thing to do.
-  $('actions').hidden = !t;
+  const sw = $('countdownBtn');
+  sw.classList.toggle('on', state.settings.countdown);
+  sw.setAttribute('aria-checked', String(state.settings.countdown));
   $('endBtn').hidden = !state.run;
 }
 
 function closePicker() {
-  $('picker').hidden = true;
   editing = false;
 }
 
@@ -179,29 +176,129 @@ function renderList() {
   const run = state.run;
   if (!run || !run.tasks.length) return;
   const current = currentTask();
-  // Up next in priority order, finished ones underneath.
-  const open = run.tasks.filter((t) => (isSection(run, t) ? !isSectionDone(run, t) : !t.done));
-  const done = run.tasks.filter((t) => !open.includes(t) && !isSection(run, t));
-  for (const t of [...open, ...done]) {
-    list.append(row(run, t, t === current));
-    if (pickerFor === t.id) {
-      const li = el('li', 'row-picker');
-      li.append(estimatePicker(t, () => {
-        pickerFor = null;
-        render();
-      }));
-      list.append(li);
+  const finished = (t: Task) => (isSection(run, t) ? isSectionDone(run, t) : t.done);
+  // Up next in priority order, finished ones underneath; subtasks sit under their task, indented.
+  const add = (tasks: Task[], depth: number) => {
+    for (const t of [...tasks.filter((x) => !finished(x)), ...tasks.filter(finished)]) {
+      list.append(row(run, t, t === current, depth));
+      if (pickerFor === t.id) {
+        const li = el('li', 'row-picker');
+        li.style.paddingLeft = 32 + depth * 18 + 'px';
+        li.append(estimatePicker(t, () => {
+          pickerFor = null;
+          render();
+        }));
+        list.append(li);
+      }
+      add(childrenOf(run, t.id), depth + 1);
+      if (subFor === t.id) list.append(subtaskField(t, depth + 1));
     }
-  }
+  };
+  add(run.tasks.filter((t) => !t.parentId || !run.tasks.some((p) => p.id === t.parentId)), 0);
 }
 
-function row(run: Run, t: Task, current: boolean): HTMLLIElement {
+/** Type a subtask and hit Enter; the field stays open for the next one. */
+function subtaskField(parent: Task, depth: number): HTMLLIElement {
+  const li = el('li', 'row-sub');
+  li.style.paddingLeft = 8 + depth * 18 + 'px';
+  const input = el('input');
+  input.placeholder = `Subtask of ${parent.title}, e.g. Hero 20m`;
+  input.onclick = (e) => e.stopPropagation();
+  input.onfocus = () => (editing = true);
+  input.onblur = () => {
+    editing = false;
+    if (!input.value.trim()) {
+      subFor = null;
+      render();
+    }
+  };
+  input.onkeydown = (k) => {
+    if (k.key === 'Enter' && input.value.trim()) {
+      const text = input.value;
+      input.value = '';
+      editing = false;
+      void api.act({ type: 'addSubtask', parentId: parent.id, text }).then(() => {
+        (document.querySelector('.row-sub input') as HTMLInputElement | null)?.focus();
+      });
+    }
+    if (k.key === 'Escape') {
+      k.stopPropagation();
+      subFor = null;
+      editing = false;
+      render();
+    }
+  };
+  li.append(input);
+  queueMicrotask(() => input.focus());
+  return li;
+}
+
+/** A task with subtasks: its rolled-up time and estimate. Tick it to finish them all. */
+function groupRow(run: Run, t: Task, depth: number): HTMLLIElement {
+  const li = el('li', 'group');
+  li.style.paddingLeft = 8 + depth * 18 + 'px';
+  const done = isSectionDone(run, t);
+  if (done) li.classList.add('done');
+  const box = el('span', 'box', '✓');
+  box.title = done ? 'Mark all its subtasks as not done' : 'Mark it and all its subtasks done';
+  box.onclick = (e) => {
+    e.stopPropagation();
+    void api.act({ type: 'toggleDone', id: t.id });
+  };
+  const kids = run.tasks.filter((x) => ancestorsOf(run, x).includes(t) && !isSection(run, x));
+  const name = el('span', 'name', t.title);
+  const count = el('span', 'count', `${kids.filter((k) => k.done).length}/${kids.length}`);
+  const spent = el('span', 'num', formatDuration(totalElapsed(run, t)));
+  spent.dataset.group = t.id;
+  li.append(box, name, count, spent);
+  const est = totalEstimate(run, t);
+  if (done && est !== undefined) {
+    const d = totalElapsed(run, t) - est;
+    li.append(el('span', 'num ' + (d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
+  } else li.append(estimateButton(t, est));
+  li.append(subtaskButton(t), removeButton(t));
+  return li;
+}
+
+function estimateButton(t: Task, est = t.estimateMs): HTMLButtonElement {
+  const b = el('button', 'est' + (t.estimateMs === undefined && est !== undefined ? ' summed' : ''), est !== undefined ? formatEstimate(est) : 'estimate');
+  b.type = 'button';
+  b.title = t.estimateMs === undefined && est !== undefined ? 'The sum of its subtasks. Click to set one for the whole task.' : 'How long do you think this takes?';
+  b.onclick = (e) => {
+    e.stopPropagation();
+    pickerFor = pickerFor === t.id ? null : t.id;
+    render();
+  };
+  return b;
+}
+
+function subtaskButton(t: Task): HTMLButtonElement {
+  const b = el('button', 'plus', '+');
+  b.type = 'button';
+  b.title = 'Add a subtask';
+  b.onclick = (e) => {
+    e.stopPropagation();
+    subFor = subFor === t.id ? null : t.id;
+    render();
+  };
+  return b;
+}
+
+function removeButton(t: Task): HTMLButtonElement {
+  const x = el('button', 'x', '×');
+  x.type = 'button';
+  x.title = 'Remove';
+  x.onclick = (e) => {
+    e.stopPropagation();
+    void api.act({ type: 'remove', id: t.id });
+  };
+  return x;
+}
+
+function row(run: Run, t: Task, current: boolean, depth: number): HTMLLIElement {
+  if (isSection(run, t)) return groupRow(run, t, depth);
   const li = el('li');
-  if (isSection(run, t)) {
-    li.className = 'section';
-    li.textContent = t.title;
-    return li;
-  }
+  li.style.paddingLeft = 8 + depth * 18 + 'px';
   if (t.done) li.classList.add('done');
   if (current) li.classList.add('current');
 
@@ -253,29 +350,14 @@ function row(run: Run, t: Task, current: boolean): HTMLLIElement {
     li.onclick = () => void api.act({ type: 'reopen', id: t.id });
   } else {
     if (spent >= 1000 || current) li.append(timeCell(t, spent, 'num'));
-    const est = el('button', 'est', t.estimateMs !== undefined ? formatEstimate(t.estimateMs) : 'estimate');
-    est.type = 'button';
-    est.title = 'How long do you think this takes?';
-    est.onclick = (e) => {
-      e.stopPropagation();
-      pickerFor = pickerFor === t.id ? null : t.id;
-      render();
-    };
-    li.append(est);
+    li.append(estimateButton(t), subtaskButton(t));
     // Click a task to work on it; click the current one while paused to carry on.
     const runningThis = current && isRunning();
     li.title = runningThis ? '' : current ? 'Click to carry on' : 'Click to switch to this task';
     li.onclick = () => !runningThis && void api.act(current ? { type: 'togglePause' } : { type: 'start', id: t.id });
   }
 
-  const x = el('button', 'x', '×');
-  x.type = 'button';
-  x.title = 'Remove';
-  x.onclick = (e) => {
-    e.stopPropagation();
-    void api.act({ type: 'remove', id: t.id });
-  };
-  li.append(x);
+  li.append(removeButton(t));
 
   li.draggable = true;
   li.ondragstart = () => (dragId = t.id);
@@ -364,7 +446,24 @@ function frame() {
       }
     }
 
+    // A subtask's group: its total time, and what's left of the group's estimate.
+    const parent = run && t ? ancestorsOf(run, t).at(-1) : undefined;
+    if (run && parent) {
+      const spent = totalElapsed(run, parent);
+      const est = totalEstimate(run, parent);
+      $('groupTime').textContent = clockParts(spent)[0];
+      const left = $('groupLeft');
+      left.textContent = est === undefined ? '' : spent <= est ? `${formatDuration(est - spent)} left` : `${formatDuration(spent - est)} over`;
+      const tone = est === undefined ? '' : spent <= est ? 'ahead' : 'behind';
+      left.className = 'saved ' + tone;
+      $('groupTime').className = 'time ' + (isRunning() ? tone : 'paused');
+    }
+
     if (isOpen()) {
+      for (const c of document.querySelectorAll<HTMLElement>('.list [data-group]')) {
+        const g = run?.tasks.find((x) => x.id === c.dataset.group);
+        if (run && g) c.textContent = formatDuration(totalElapsed(run, g));
+      }
       // Times in the list tick along too.
       for (const c of document.querySelectorAll<HTMLElement>('.list [data-time]')) {
         const task = run?.tasks.find((x) => x.id === c.dataset.time);
@@ -373,7 +472,9 @@ function frame() {
       const delta = $('delta');
       if (t?.estimateMs !== undefined && ms > 0) {
         const d = t.estimateMs - ms;
-        delta.textContent = d >= 0 ? `${formatDuration(d)} left` : `${formatDuration(-d)} over`;
+        // Counting down, the clock already shows what's left, so say how long it's been instead.
+        if (state.settings.countdown) delta.textContent = `${formatDuration(ms)} in`;
+        else delta.textContent = d >= 0 ? `${formatDuration(d)} left` : `${formatDuration(-d)} over`;
         delta.className = 'delta ' + (d >= 0 ? 'ahead' : 'behind');
       } else delta.textContent = '';
     }
@@ -444,22 +545,19 @@ function wireFace() {
 function wire() {
   wireFace();
 
-  $('estimate').onclick = () => {
-    const p = $('picker');
-    p.hidden = !p.hidden;
-    render();
-  };
-  $('play').onclick = () => {
+  // The round button and the circle sit on the face, so keep their clicks from opening or dragging it.
+  for (const id of ['go', 'tick']) $(id).addEventListener('mousedown', (e) => e.stopPropagation());
+  $('go').onclick = () => {
     const t = currentTask();
     if (!t) return;
     void (state.run?.activeTaskId ? api.act({ type: 'togglePause' }) : api.act({ type: 'start', id: t.id }));
   };
-  $('done').onclick = () => {
+  $('tick').onclick = () => {
     const t = currentTask();
     if (!t) return;
-    closePicker();
-    void (state.run?.activeTaskId ? api.act({ type: 'split' }) : api.act({ type: 'toggleDone', id: t.id }));
+    void (state.run?.activeTaskId === t.id ? api.act({ type: 'split' }) : api.act({ type: 'toggleDone', id: t.id }));
   };
+  $('countdownBtn').onclick = () => void api.act({ type: 'settings', patch: { countdown: !state.settings.countdown } });
 
   $('addForm').onsubmit = (e) => {
     e.preventDefault();
@@ -513,6 +611,11 @@ function wire() {
     window.addEventListener('mouseup', up);
   });
   $('summaryStats').onclick = () => void api.act({ type: 'openDashboard' });
+  $('resumeSession').onclick = async () => {
+    await api.act({ type: 'resumeSession' });
+    setOpen(true);
+    $('addInput').focus();
+  };
   $('newSession').onclick = async () => {
     await api.act({ type: 'dismissSummary' });
     setOpen(true);
@@ -527,9 +630,10 @@ function wire() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (!$('picker').hidden || pickerFor || !paste.hidden) {
+    if (pickerFor || subFor || !paste.hidden) {
       closePicker();
       pickerFor = null;
+      subFor = null;
       paste.hidden = true;
       render();
     } else setOpen(false);

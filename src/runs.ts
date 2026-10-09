@@ -261,17 +261,23 @@ export function projectedRemaining(run: Run, now = Date.now()): number {
 /**
  * Time saved against your estimates. Finished tasks count their full difference; an unfinished task
  * counts only once it runs past its estimate, since time still left on it isn't saved yet.
- * Tasks without an estimate don't count. Undefined when nothing counts yet.
+ * With subtasks, the most detailed estimate counts: a subtask's own, or else its parent's for the whole
+ * group. Tasks without an estimate don't count. Undefined when nothing counts yet.
  */
 export function timeSaved(run: Run, now = Date.now()): { savedMs: number; plannedMs: number; actualMs: number } | undefined {
   let savedMs = 0;
   let plannedMs = 0;
   let actualMs = 0;
   let any = false;
-  for (const t of run.tasks) {
-    if (isSection(run, t) || t.estimateMs === undefined) continue;
-    const spent = liveElapsed(run, t, now);
-    if (t.done) {
+  const hasEstimateBelow = (t: Task): boolean => childrenOf(run, t.id).some((c) => c.estimateMs !== undefined || hasEstimateBelow(c));
+  const visit = (t: Task) => {
+    const section = isSection(run, t);
+    if (t.estimateMs === undefined || (section && hasEstimateBelow(t))) {
+      for (const c of childrenOf(run, t.id)) visit(c);
+      return;
+    }
+    const spent = totalElapsed(run, t, now);
+    if (section ? isSectionDone(run, t) : t.done) {
       plannedMs += t.estimateMs;
       actualMs += spent;
       savedMs += t.estimateMs - spent;
@@ -280,8 +286,21 @@ export function timeSaved(run: Run, now = Date.now()): { savedMs: number; planne
       savedMs -= spent - t.estimateMs;
       any = true;
     }
-  }
+  };
+  for (const t of run.tasks) if (!t.parentId) visit(t);
   return any ? { savedMs, plannedMs, actualMs } : undefined;
+}
+
+/** The parents of a task, outermost first. */
+export function ancestorsOf(run: Run, t: Task): Task[] {
+  const out: Task[] = [];
+  for (let p = run.tasks.find((x) => x.id === t.parentId); p; p = run.tasks.find((x) => x.id === p!.parentId)) out.unshift(p);
+  return out;
+}
+
+/** All tasks under a task, at any depth. */
+export function descendantsOf(run: Run, id: string): Task[] {
+  return childrenOf(run, id).flatMap((c) => [c, ...descendantsOf(run, c.id)]);
 }
 
 // ---------- mutations (return the same run, mutated) ----------
@@ -364,6 +383,25 @@ export function completeActive(run: Run, now = Date.now()): Run {
 export function toggleDone(run: Run, id: string, now = Date.now()): Run {
   const t = run.tasks.find((x) => x.id === id);
   if (!t) return run;
+  if (isSection(run, t)) {
+    // A task with subtasks is done when they all are: ticking it ticks (or unticks) them all.
+    const done = !isSectionDone(run, t);
+    const leaves = descendantsOf(run, id).filter((d) => !isSection(run, d));
+    const wasRunning = run.activeSince !== undefined;
+    if (done && leaves.some((d) => d.id === run.activeTaskId)) stopClock(run, now);
+    for (const d of leaves) {
+      d.done = done;
+      d.doneAt = done ? new Date(now).toISOString() : undefined;
+    }
+    if (done && run.activeTaskId && leaves.some((d) => d.id === run.activeTaskId)) {
+      const next = nextTask(run);
+      run.activeTaskId = next?.id;
+      run.activeSince = next && wasRunning ? now : undefined;
+      if (!next) run.endedAt = new Date(now).toISOString();
+    }
+    if (!done) run.endedAt = undefined;
+    return run;
+  }
   if (run.activeTaskId === id && !t.done) return completeActive(run, now);
   t.done = !t.done;
   t.doneAt = t.done ? new Date(now).toISOString() : undefined;
@@ -373,6 +411,30 @@ export function toggleDone(run: Run, id: string, now = Date.now()): Run {
 
 export function addTasks(run: Run, tasks: Task[], atTop = false): Run {
   run.tasks = atTop ? [...tasks, ...run.tasks] : [...run.tasks, ...tasks];
+  return run;
+}
+
+/**
+ * Adds a subtask under a task, after its other subtasks. The parent becomes a group whose time is the
+ * sum of its subtasks. If the parent was on the clock, the clock moves to its first open subtask.
+ */
+export function addSubtask(run: Run, parentId: string, task: Task, now = Date.now()): Run {
+  const parent = run.tasks.find((t) => t.id === parentId);
+  if (!parent) return run;
+  task.parentId = parentId;
+  const block = [parent, ...descendantsOf(run, parentId)];
+  const at = Math.max(...block.map((b) => run.tasks.indexOf(b))) + 1;
+  run.tasks.splice(at, 0, task);
+  parent.done = false;
+  parent.doneAt = undefined;
+  run.endedAt = undefined;
+  if (run.activeTaskId === parentId) {
+    const running = run.activeSince !== undefined;
+    stopClock(run, now);
+    const first = descendantsOf(run, parentId).find((d) => !d.done && !isSection(run, d))!;
+    run.activeTaskId = first.id;
+    if (running) run.activeSince = now;
+  }
   return run;
 }
 
