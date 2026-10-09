@@ -1,11 +1,13 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, screen, Tray } from 'electron';
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, screen, Tray } from 'electron';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Action, AppState } from './api.js';
 import {
-  addSubtask, addTasks, clampScale, completeActive, endPause, formatDuration, goldSplits, liveElapsed, moveTask, newRun, parseDuration, parseQuickAdd,
-  parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, setElapsed, removeTask, resume, runElapsed, startTask, summarize, toggleDone, type Run, type Settings,
+  addSubtask, addTasks, bestFor, bestIndex, clampScale, completeActive, endPause, formatDuration, formatEstimate, goldSplits, isSection, liveElapsed, matchKey,
+  moveTask, newRun, nextTask, pairKey, parseDuration, parseQuickAdd, parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, runFromTemplate, setElapsed,
+  removeTask, runElapsed, startTask, summarize, templateFromRun, templateFromText, templateRecord, toggleDone, type Best, type Run, type Settings,
+  type Template,
 } from './runs.js';
 import { RunStore } from './runStore.js';
 
@@ -21,6 +23,9 @@ let settings: Settings;
 let run: Run | null = null;
 let finished: Run | null = null;
 let pastRuns: Run[] = [];
+let templates: Template[] = [];
+/** "3, 2, 1, Go": the task that starts, and when. */
+let countIn: { taskId: string; until: number; timer: NodeJS.Timeout } | null = null;
 
 let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
@@ -33,7 +38,92 @@ const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 // ---------- state ----------
 
 function state(): AppState {
-  return { run, finished, settings, golds: [...goldSplits(pastRuns.filter((r) => r !== run))], totals: totals() };
+  const live = run ?? finished;
+  const others = pastRuns.filter((r) => r.id !== live?.id);
+  return {
+    run,
+    finished,
+    settings,
+    golds: [...goldSplits(pastRuns.filter((r) => r !== run))],
+    totals: totals(),
+    templates,
+    bests: live && settings.race ? bests(live, others) : {},
+    record: live ? record(live, others) : undefined,
+    suggestions: suggestions(),
+    countInUntil: countIn?.until,
+  };
+}
+
+/** Your best time for each task of a session, from the sessions before it. */
+function bests(r: Run, others: Run[]): Record<string, Best> {
+  const index = bestIndex(others);
+  const out: Record<string, Best> = {};
+  for (const t of r.tasks) {
+    if (isSection(r, t)) continue;
+    const b = bestFor(t, r, others, index, settings.notSame);
+    if (b) out[t.id] = b;
+  }
+  return out;
+}
+
+/** For a session from a template: its PB and records, and where this attempt ranks once finished. */
+function record(r: Run, others: Run[]): AppState['record'] {
+  const tpl = templates.find((t) => t.id === r.templateId);
+  if (!tpl) return undefined;
+  const before = templateRecord(tpl, others);
+  const withThis = templateRecord(tpl, [...others, r]);
+  const rank = withThis.finishedMs.findIndex((f) => f.runId === r.id);
+  return { ...before, attempts: withThis.attempts, resets: withThis.resets, name: tpl.name, rank: rank >= 0 ? rank + 1 : undefined, prevPbMs: before.pb?.ms };
+}
+
+/** Task names you've used, newest first, each with its last estimate. */
+function suggestions(): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of pastRuns)
+    for (const t of [...r.tasks].reverse()) {
+      const k = t.title.toLowerCase();
+      if (seen.has(k) || isSection(r, t)) continue;
+      seen.add(k);
+      out.push(t.title + (t.estimateMs !== undefined ? ' ' + formatEstimate(t.estimateMs).replace(' ', '') : ''));
+      if (out.length >= 300) return out;
+    }
+  return out;
+}
+
+function persistTemplates() {
+  void runStore.saveTemplates(templates).catch((err) => console.error('[speedrun] saving templates failed', err));
+  buildMenu();
+}
+
+/** Starts the clock on a task, with "3, 2, 1, Go" first when it's the session's very first start. */
+function go(r: Run, taskId: string, now: number) {
+  if (settings.countIn && runElapsed(r, now) === 0 && r.activeSince === undefined && !countIn) {
+    const until = now + 2000;
+    countIn = { taskId, until, timer: setTimeout(() => void act({ type: 'skipCountIn' }), 2000) };
+    return;
+  }
+  startTask(r, taskId, now);
+}
+
+/** Ends "3, 2, 1, Go" and starts the clock, from when Go was meant to be (or now, if you skipped it). */
+function finishCountIn(now: number) {
+  if (!countIn) return;
+  clearTimeout(countIn.timer);
+  const { taskId, until } = countIn;
+  countIn = null;
+  if (run?.tasks.some((t) => t.id === taskId)) startTask(run, taskId, Math.min(now, until));
+}
+
+/** A new session from a template. A session with tasks in it ends first. */
+async function startTemplate(id: string, now: number) {
+  const tpl = templates.find((t) => t.id === id);
+  if (!tpl) return;
+  if (run?.tasks.length) await endRun(now);
+  if (run) pastRuns = pastRuns.filter((r) => r !== run);
+  finished = null;
+  run = runFromTemplate(tpl, new Date(now));
+  pastRuns = [run, ...pastRuns];
 }
 
 /** Time on tasks and in pauses today and over the last 7 days, by the day each session started. */
@@ -90,6 +180,7 @@ function ensureRun(): Run {
 /** Stops the clock, saves the run as finished and clears it; the next task you add starts a fresh run. */
 async function endRun(now: number) {
   if (!run) return;
+  if (countIn) (clearTimeout(countIn.timer), (countIn = null));
   pause(run, now);
   // A pause still going when you end the session is the time after it, not a break in it.
   run.pausedSince = undefined;
@@ -151,13 +242,89 @@ async function act(a: Action) {
     case 'import':
       addTasks(ensureRun(), parseTaskList(a.text));
       break;
+    case 'saveTemplate': {
+      // From the end of a session: its tasks become a template, or update the one it came from.
+      const src = finished ?? run;
+      if (!src?.tasks.length) break;
+      const existing = templates.find((t) => t.id === src.templateId);
+      const tpl = templateFromRun(src, a.name, existing);
+      templates = existing ? templates.map((t) => (t.id === tpl.id ? tpl : t)) : [...templates, tpl];
+      if (!existing) {
+        // This session is now the first attempt of its template.
+        const ids = new Map(src.tasks.map((t, i) => [t.id, tpl.tasks[i].id]));
+        src.templateId = tpl.id;
+        for (const t of src.tasks) t.templateTaskId = ids.get(t.id);
+        if (finished) await runStore.save(finished);
+      }
+      persistTemplates();
+      break;
+    }
+    case 'importTemplate': {
+      const tasks = parseTaskList(a.text);
+      if (!tasks.length) break;
+      const tpl = templateFromRun({ ...newRun('manual'), tasks }, a.name || 'Template');
+      templates = [...templates, tpl];
+      persistTemplates();
+      break;
+    }
+    case 'startTemplate':
+      await startTemplate(a.id, now);
+      break;
+    case 'renameTemplate': {
+      const name = a.name.trim();
+      if (name) templates = templates.map((t) => (t.id === a.id ? { ...t, name } : t));
+      persistTemplates();
+      break;
+    }
+    case 'editTemplate':
+      templates = templates.map((t) => (t.id === a.id ? templateFromText(t, a.text) : t));
+      persistTemplates();
+      break;
+    case 'deleteTemplate':
+      // Its past sessions stay, as plain sessions.
+      templates = templates.filter((t) => t.id !== a.id);
+      persistTemplates();
+      break;
+    case 'resetRun': {
+      // A bad start: this attempt is kept for your totals but never counts as a run, and the route starts over.
+      if (!run?.templateId) break;
+      const tpl = templates.find((t) => t.id === run!.templateId);
+      if (countIn) (clearTimeout(countIn.timer), (countIn = null));
+      pause(run, now);
+      run.pausedSince = undefined;
+      run.reset = true;
+      run.endedAt = new Date(now).toISOString();
+      await runStore.save(run);
+      run = tpl ? runFromTemplate(tpl, new Date(now + 1)) : null;
+      if (run) pastRuns = [run, ...pastRuns];
+      break;
+    }
+    case 'notSame': {
+      const t = run?.tasks.find((x) => x.id === a.taskId) ?? finished?.tasks.find((x) => x.id === a.taskId);
+      const b = t && (run ?? finished) ? state().bests[t.id] : undefined;
+      if (t && b?.fuzzy) settings = { ...settings, notSame: [...settings.notSame, pairKey(matchKey(t.title), b.key)] };
+      persistSettings();
+      break;
+    }
+    case 'skipCountIn':
+      finishCountIn(now);
+      break;
+    case 'copyResult':
+      // The finish screen as a picture, ready to paste anywhere.
+      if (overlay && !overlay.isDestroyed()) {
+        const z = settings.scale;
+        const r = a.rect;
+        const img = await overlay.webContents.capturePage({ x: Math.floor(r.x * z), y: Math.floor(r.y * z), width: Math.ceil(r.width * z), height: Math.ceil(r.height * z) });
+        await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(img.toPNG())], { type: 'image/png' }) })]);
+      }
+      return;
     case 'importFile': {
       const res = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Notes', extensions: ['md', 'txt', 'markdown', 'taskpaper'] }] });
       if (!res.canceled && res.filePaths[0]) addTasks(ensureRun(), parseTaskList(await readFile(res.filePaths[0], 'utf8')));
       break;
     }
     case 'start':
-      if (run) startTask(run, a.id, now);
+      if (run) go(run, a.id, now);
       break;
     case 'toggleDone':
       if (run) toggleDone(run, a.id, now);
@@ -174,7 +341,12 @@ async function act(a: Action) {
       if (run) completeActive(run, now);
       break;
     case 'togglePause':
-      if (run) run.activeSince !== undefined ? pause(run, now) : resume(run, now);
+      if (countIn) finishCountIn(now);
+      else if (run && run.activeSince !== undefined) pause(run, now);
+      else if (run) {
+        const next = run.tasks.find((t) => t.id === run!.activeTaskId) ?? nextTask(run);
+        if (next) go(run, next.id, now);
+      }
       break;
     case 'remove':
       if (run) removeTask(run, a.id, now);
@@ -342,7 +514,7 @@ function openSettings() {
   }
   settingsWin = new BrowserWindow({
     width: 340,
-    height: 470,
+    height: 540,
     minWidth: 320,
     minHeight: 360,
     maximizable: false,
@@ -380,6 +552,12 @@ function buildMenu() {
   tray?.setContextMenu(
     Menu.buildFromTemplate([
       { label: overlay?.isVisible() ? 'Hide timer' : 'Show timer', accelerator: 'CommandOrControl+Alt+Shift+Space', click: toggleOverlay },
+      {
+        label: 'Start template',
+        submenu: templates.length
+          ? templates.map((t) => ({ label: t.name, click: () => void act({ type: 'startTemplate', id: t.id }) }))
+          : [{ label: 'No templates yet: save one at the end of a session', enabled: false }],
+      },
       { label: 'Stats', click: openDashboard },
       { label: 'Settings…', click: openSettings },
       { type: 'separator' },
@@ -420,6 +598,7 @@ app.whenReady().then(async () => {
   settings.scale = clampScale(settings.scale);
   nativeTheme.themeSource = settings.theme;
   pastRuns = await runStore.list();
+  templates = await runStore.loadTemplates();
   const today = new Date().toLocaleDateString('sv-SE');
   const latest = pastRuns[0];
   if (latest && !latest.endedAt && new Date(latest.startedAt).toLocaleDateString('sv-SE') === today) run = latest;
@@ -430,7 +609,8 @@ app.whenReady().then(async () => {
     const runs = await runStore.list();
     if (run && !runs.some((r) => r.id === run!.id)) runs.unshift(run);
     const merged = runs.map((r) => (run && r.id === run.id ? run : r));
-    return { summaries: merged.map((r) => summarize(r)), runs: merged };
+    const records = Object.fromEntries(templates.map((t) => [t.id, templateRecord(t, merged)]));
+    return { summaries: merged.map((r) => summarize(r)), runs: merged, records };
   });
 
   const trayIcon = nativeImage.createFromPath(join(staticDir, 'icons', 'trayTemplate.png'));

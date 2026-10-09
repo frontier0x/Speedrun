@@ -1,9 +1,10 @@
 import type { AppState, SpeedrunApi } from '../api.js';
 import {
-  ancestorsOf, childrenOf, formatDuration, formatEstimate, isSection, isSectionDone, liveElapsed, pausedTotal, sessionElapsed, taskKey,
-  timeSaved, totalElapsed, totalEstimate, type Run, type Task,
+  ancestorsOf, childrenOf, formatDuration, formatEstimate, isComplete, isSection, isSectionDone, liveElapsed, medal, pausedTotal, pbPace, runElapsed,
+  sessionElapsed, taskKey, timeSaved, totalElapsed, totalEstimate, type Run, type Task,
 } from '../runs.js';
 import { palette, paletteVars, paintSolid, resolveMode } from '../theme.js';
+import { play, type Sound } from './sound.js';
 
 const api = (window as unknown as { speedrun: SpeedrunApi }).speedrun;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -15,6 +16,9 @@ let golds = new Map<string, number>();
 let editing = false; // hold list re-renders while an inline editor is open
 let pickerFor: string | null = null; // task whose estimate picker is open in the list
 let subFor: string | null = null; // task whose "add a subtask" field is open in the list
+/** For a moment after you tick a task off, its result stands where the task name is. */
+let flash: { text: string; tone: string; until: number } | null = null;
+let savedTemplateFor: string | null = null; // the finished session you just saved as a template
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -50,7 +54,16 @@ function applyTheme() {
   for (const [k, v] of Object.entries(paletteVars(colors))) root.setProperty(k, v);
   root.setProperty('--button-ink', inkFor(paintSolid(colors.button)));
   root.setProperty('--clock-weight', String(s.clockWeight));
+  document.body.classList.toggle('style-speedrun', s.clockStyle === 'speedrun');
 }
+
+const sfx = (sound: Sound) => state.settings.sounds && play(sound, state.settings.volume);
+
+/** Your best for the task when you race it. */
+const bestOf = (t: Task | undefined) => (t && state.settings.race ? state.bests[t.id] : undefined);
+
+const ORD = ['th', 'st', 'nd', 'rd'];
+const ordinal = (n: number) => n + (ORD[(n % 100 > 10 && n % 100 < 14) || n % 10 > 3 ? 0 : n % 10] ?? 'th');
 
 /** Black or white, whichever reads better on the color. */
 function inkFor(hex: string): string {
@@ -126,6 +139,11 @@ function renderFace() {
   if (run && t) for (const a of ancestorsOf(run, t)) task.append(el('span', 'crumb', a.title + ' › '));
   task.append(t ? t.title : run?.tasks.length ? 'All done. GG.' : 'Click to add your first task');
   task.className = 'task' + (t ? '' : ' empty');
+  if (flash && flash.until > Date.now()) {
+    task.textContent = flash.text;
+    task.className = 'task flash ' + flash.tone;
+  }
+  $('resetBtn').hidden = !run?.templateId;
   $('tick').hidden = !t;
   $('go').hidden = !t;
   $('go').classList.toggle('running', isRunning());
@@ -142,15 +160,46 @@ function renderSummary(run: Run) {
   const saved = timeSaved(run);
   const total = sessionElapsed(run, state.settings.pausesCount);
   const net = saved?.savedMs ?? 0;
-  const [hms, milli] = clockParts(Math.abs(net));
-  $('savedHms').textContent = (net < 0 ? '−' : '+') + hms;
-  $('savedMs').textContent = milli;
-  $('savedClock').className = 'clock ' + (!saved ? 'idle' : net >= 0 ? 'ahead' : 'behind');
-  $('savedLabel').textContent = !saved
-    ? 'Give tasks an estimate to see how much time you save.'
-    : net >= 0
-      ? 'saved against your plan'
-      : 'over your plan';
+  const rec = state.record;
+  const label = $('savedLabel');
+  const rank = $('rankLine');
+  rank.hidden = true;
+  if (rec && isComplete(run)) {
+    // A template run all the way through: the big number is your time, raced against your PB.
+    const ms = runElapsed(run);
+    const [hms, milli] = clockParts(ms);
+    $('sumTitle').textContent = rec.name;
+    $('savedHms').textContent = hms;
+    $('savedMs').textContent = milli;
+    const prev = rec.prevPbMs;
+    const pb = prev === undefined || ms < prev;
+    $('savedClock').className = 'clock ' + (prev === undefined ? 'ahead' : pb ? 'gold shine' : '');
+    label.textContent = prev === undefined ? 'First run. That’s your PB to beat.' : pb ? `★ NEW PB  −${formatDuration(prev - ms)}` : `+${formatDuration(ms - prev)} on your PB`;
+    label.className = 'saved-label ' + (prev === undefined ? '' : pb ? 'gold' : 'behind');
+    const bits = [];
+    if (rec.attempts > 1 && rec.rank) bits.push(`${rec.rank === 1 ? 'Fastest' : ordinal(rec.rank) + ' fastest'} of ${rec.attempts} attempts`);
+    if (rec.resets) bits.push(`${rec.resets} reset${rec.resets === 1 ? '' : 's'}`);
+    if (saved) bits.push(net >= 0 ? `${formatDuration(net)} saved` : `${formatDuration(-net)} over plan`);
+    rank.textContent = bits.join(' · ');
+    rank.hidden = !bits.length;
+  } else {
+    const [hms, milli] = clockParts(Math.abs(net));
+    $('sumTitle').textContent = 'Session done';
+    $('savedHms').textContent = (net < 0 ? '−' : '+') + hms;
+    $('savedMs').textContent = milli;
+    $('savedClock').className = 'clock ' + (!saved ? 'idle' : net >= 0 ? 'ahead' : 'behind');
+    label.className = 'saved-label';
+    label.textContent = !saved
+      ? 'Give tasks an estimate to see how much time you save.'
+      : net >= 0
+        ? 'saved against your plan'
+        : 'over your plan';
+  }
+  renderMedals(run);
+  const tpl = state.templates.find((t) => t.id === run.templateId);
+  const btn = $('saveTpl');
+  btn.textContent = savedTemplateFor === run.id ? 'Saved ✓' : tpl ? 'Update template' : 'Save as template';
+  btn.title = tpl ? `Save the tasks of this session into “${tpl.name}”` : 'Run these tasks again any time, and race your best';
   const leaves = run.tasks.filter((t) => !isSection(run, t));
   $('factTotal').textContent = formatDuration(total);
   $('factPaused').textContent = formatDuration(pausedTotal(run));
@@ -162,6 +211,29 @@ function renderSummary(run: Run) {
   $('totWeek').textContent = `${formatDuration(tot.weekMs)} · ${formatDuration(tot.weekPausedMs)} paused`;
 }
 
+/** A medal per finished task: gold for a new best, silver under the estimate, bronze just over. */
+function renderMedals(run: Run) {
+  const list = $('medals');
+  list.replaceChildren();
+  const done = run.tasks.filter((t) => t.done && !isSection(run, t));
+  const rows = done.map((t) => {
+    const best = bestOf(t);
+    const m = medal(t, best);
+    const li = el('li');
+    li.append(el('span', 'm ' + (m ?? '')), el('span', 't', t.title));
+    const d = best ? t.elapsedMs - best.ms : t.estimateMs !== undefined ? t.elapsedMs - t.estimateMs : undefined;
+    li.append(el('span', 'num', formatDuration(t.elapsedMs)));
+    if (d !== undefined) li.append(el('span', 'num ' + (m === 'gold' ? 'gold' : d <= 0 ? 'ahead' : 'behind'), formatDuration(d, { signed: true })));
+    if (m) li.title = { gold: 'New best', silver: 'Under your estimate', bronze: 'Up to 10 % over your estimate' }[m];
+    return { li, counts: d !== undefined };
+  });
+  // Only worth showing when there's something to measure against.
+  if (!rows.some((r) => r.counts)) return;
+  const MAX = 8;
+  for (const r of rows.slice(0, MAX)) list.append(r.li);
+  if (rows.length > MAX) list.append(el('li', 'more-tasks', `+${rows.length - MAX} more`));
+}
+
 // ---------- more ----------
 
 function renderControls() {
@@ -169,6 +241,24 @@ function renderControls() {
   sw.classList.toggle('on', state.settings.countdown);
   sw.setAttribute('aria-checked', String(state.settings.countdown));
   $('endBtn').hidden = !state.run;
+  // An empty session: your templates, one click to start.
+  const chips = $('tplChips');
+  const empty = !state.run?.tasks.length;
+  chips.hidden = !empty || !state.templates.length;
+  chips.replaceChildren();
+  if (!chips.hidden) {
+    chips.append(el('span', 'label', 'Start a template'));
+    for (const tpl of state.templates) {
+      const b = el('button', '', tpl.name);
+      b.type = 'button';
+      b.onclick = () => void api.act({ type: 'startTemplate', id: tpl.id });
+      chips.append(b);
+    }
+  }
+  const names = $('taskNames');
+  if (names.childElementCount !== state.suggestions.length || names.firstElementChild?.getAttribute('value') !== state.suggestions[0]) {
+    names.replaceChildren(...state.suggestions.map((v) => Object.assign(document.createElement('option'), { value: v })));
+  }
 }
 
 function closePicker() {
@@ -210,6 +300,7 @@ function subtaskField(parent: Task, depth: number): HTMLLIElement {
   li.style.paddingLeft = 8 + depth * 18 + 'px';
   const input = el('input');
   input.placeholder = `Subtask of ${parent.title}, e.g. Hero 20m`;
+  input.setAttribute('list', 'taskNames');
   input.onclick = (e) => e.stopPropagation();
   input.onfocus = () => (editing = true);
   input.onblur = () => {
@@ -418,7 +509,33 @@ function timeCell(t: Task, ms: number, cls: string): HTMLElement {
 
 // ---------- the clock ----------
 
+let countShown = '';
+let raceHtml = '';
+
+/** "3, 2, 1, Go" in place of the clock, kept as wide as the clock so nothing jumps. */
+function countInFrame(until: number): boolean {
+  const clock = $('clock');
+  const rem = until - Date.now();
+  const label = rem > 1500 ? '3' : rem > 1000 ? '2' : rem > 500 ? '1' : 'GO';
+  if (!countShown) clock.style.minWidth = clock.offsetWidth + 'px';
+  if (label !== countShown) sfx(label === 'GO' ? 'go' : 'count');
+  countShown = label;
+  $('hms').textContent = label;
+  $('ms').textContent = '';
+  clock.className = 'clock count-in ' + (label === 'GO' ? 'ahead' : '');
+  return true;
+}
+
 function frame() {
+  if (state?.countInUntil && !state.finished) {
+    countInFrame(state.countInUntil);
+    requestAnimationFrame(frame);
+    return;
+  }
+  if (countShown) {
+    countShown = '';
+    $('clock').style.minWidth = '';
+  }
   if (state) {
     const run = state.run;
     const t = currentTask();
@@ -430,10 +547,13 @@ function frame() {
     $('hms').textContent = (left !== undefined && left < 0 ? '−' : '') + hms;
     $('ms').textContent = milli;
 
+    // Racing your best, the clock's color says whether you're beating it; otherwise your estimate.
+    const best = bestOf(t);
+    const target = best && !state.settings.countdown ? best.ms : t?.estimateMs;
     let tone = 'idle';
-    if (t && isRunning()) tone = t.estimateMs === undefined ? '' : ms <= t.estimateMs ? 'ahead' : 'behind';
+    if (t && isRunning()) tone = target === undefined ? '' : ms <= target ? 'ahead' : 'behind';
     else if (t && ms > 0) tone = 'paused';
-    clock.className = 'clock ' + tone;
+    clock.className = 'clock ' + tone + (flash?.tone === 'gold' && flash.until > Date.now() ? ' shine' : '');
 
     // Session: all time on this run's tasks, colored by what you've saved or lost so far.
     const session = $('session');
@@ -477,8 +597,28 @@ function frame() {
         const task = run?.tasks.find((x) => x.id === c.dataset.time);
         if (run && task && !task.done) c.textContent = formatDuration(liveElapsed(run, task));
       }
+      // Your best for this task, live, and for a template how you're doing against your PB run.
+      const race = $('race');
+      const pace = state.settings.race && run && state.record?.pb ? pbPace(run, state.record.pb.tasks) : undefined;
+      let html = '';
+      if (best) {
+        const d = best.ms - ms;
+        html = `Best ${formatDuration(best.ms)} · ` + (d >= 0 ? `<span class="ahead">${formatDuration(d)} left</span>` : `<span class="behind">${formatDuration(-d)} over</span>`);
+      }
+      if (pace !== undefined) html += (html ? ' · ' : '') + `PB <span class="${pace <= 0 ? 'ahead' : 'behind'}">${formatDuration(pace, { signed: true })}</span>`;
+      if (html !== raceHtml) {
+        raceHtml = html;
+        race.innerHTML = html;
+        race.hidden = !html;
+        race.classList.toggle('fuzzy', Boolean(best?.fuzzy));
+        race.title = best
+          ? `Your best: ${formatDuration(best.ms)}, ${best.from}, ${new Date(best.at).toLocaleDateString([], { day: 'numeric', month: 'short' })}` +
+            (best.fuzzy ? `. Matched a similar task (“${best.key}”): click if it's not the same.` : '')
+          : 'Against your fastest run of this template';
+      }
       const delta = $('delta');
-      if (t?.estimateMs !== undefined && ms > 0) {
+      if (html) delta.textContent = '';
+      else if (t?.estimateMs !== undefined && ms > 0) {
         const d = t.estimateMs - ms;
         // Counting down, the clock already shows what's left, so say how long it's been instead.
         if (state.settings.countdown) delta.textContent = `${formatDuration(ms)} in`;
@@ -543,7 +683,8 @@ function wireFace() {
   });
   window.addEventListener('mouseup', () => {
     if (start && dragged) void api.act({ type: 'dragEnd' });
-    if (start && !dragged) {
+    if (start && !dragged && state.countInUntil) void api.act({ type: 'skipCountIn' });
+    else if (start && !dragged) {
       setOpen(!isOpen());
       if (isOpen() && !currentTask()) $('addInput').focus();
     }
@@ -566,6 +707,30 @@ function wire() {
     if (!t) return;
     void (state.run?.activeTaskId === t.id ? api.act({ type: 'split' }) : api.act({ type: 'toggleDone', id: t.id }));
   };
+  // Reset: the first click arms it, a second within 3 seconds throws the attempt away and starts the route over.
+  $('resetBtn').addEventListener('mousedown', (e) => e.stopPropagation());
+  let armed: ReturnType<typeof setTimeout> | undefined;
+  $('resetBtn').onclick = () => {
+    const b = $('resetBtn');
+    if (!b.classList.contains('armed')) {
+      b.classList.add('armed');
+      b.title = 'Click again to reset this run';
+      armed = setTimeout(() => b.classList.remove('armed'), 3000);
+      return;
+    }
+    clearTimeout(armed);
+    b.classList.remove('armed');
+    void api.act({ type: 'resetRun' });
+  };
+  $('race').onclick = () => {
+    if ($('race').classList.contains('fuzzy')) $('notSame').hidden = !$('notSame').hidden;
+  };
+  $('notSame').onclick = () => {
+    const t = currentTask();
+    $('notSame').hidden = true;
+    raceHtml = '';
+    if (t) void api.act({ type: 'notSame', taskId: t.id });
+  };
   $('countdownBtn').onclick = () => void api.act({ type: 'settings', patch: { countdown: !state.settings.countdown } });
 
   $('addForm').onsubmit = (e) => {
@@ -580,7 +745,21 @@ function wire() {
     paste.hidden = !paste.hidden;
     if (!paste.hidden) $('pasteText').focus();
   };
-  $('pasteCancel').onclick = () => (paste.hidden = true);
+  $('pasteTpl').onclick = () => {
+    if (!$<HTMLTextAreaElement>('pasteText').value.trim()) return $('pasteText').focus();
+    $('pasteTplName').hidden = false;
+    $('pasteTplName').focus();
+  };
+  $('pasteTplName').onkeydown = (k) => {
+    const input = $<HTMLInputElement>('pasteTplName');
+    if (k.key !== 'Enter' || !input.value.trim()) return;
+    const ta = $<HTMLTextAreaElement>('pasteText');
+    void api.act({ type: 'importTemplate', name: input.value.trim(), text: ta.value });
+    input.value = '';
+    input.hidden = true;
+    ta.value = '';
+    paste.hidden = true;
+  };
   $('pasteFile').onclick = () => {
     paste.hidden = true;
     void api.act({ type: 'importFile' });
@@ -620,6 +799,34 @@ function wire() {
     window.addEventListener('mouseup', up);
   });
   $('summaryStats').onclick = () => void api.act({ type: 'openDashboard' });
+  $('saveTpl').onclick = () => {
+    const fin = state.finished;
+    if (!fin || savedTemplateFor === fin.id) return;
+    if (state.templates.some((t) => t.id === fin.templateId)) {
+      savedTemplateFor = fin.id;
+      void api.act({ type: 'saveTemplate', name: '' });
+      return;
+    }
+    const form = $('tplForm');
+    form.hidden = !form.hidden;
+    const input = $<HTMLInputElement>('tplName');
+    input.value = fin.name;
+    if (!form.hidden) (input.focus(), input.select());
+  };
+  $('tplForm').onsubmit = (e) => {
+    e.preventDefault();
+    const name = $<HTMLInputElement>('tplName').value.trim();
+    if (!name || !state.finished) return;
+    savedTemplateFor = state.finished.id;
+    $('tplForm').hidden = true;
+    void api.act({ type: 'saveTemplate', name });
+  };
+  $('copyBtn').onclick = async () => {
+    const r = $('result').getBoundingClientRect();
+    await api.act({ type: 'copyResult', rect: { x: r.x, y: r.y, width: r.width, height: r.height } });
+    $('copyBtn').textContent = 'Copied ✓';
+    setTimeout(() => ($('copyBtn').textContent = 'Copy'), 1500);
+  };
   $('continueForm').onsubmit = async (e) => {
     e.preventDefault();
     const input = $<HTMLInputElement>('continueInput');
@@ -643,7 +850,8 @@ function wire() {
 
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (pickerFor || subFor || !paste.hidden) {
+    if (state.countInUntil) void api.act({ type: 'skipCountIn' });
+    else if (pickerFor || subFor || !paste.hidden) {
       closePicker();
       pickerFor = null;
       subFor = null;
@@ -658,9 +866,42 @@ function wire() {
   darkQuery.addEventListener('change', () => state && applyTheme());
 }
 
+/** Ticking a task off: a sound, and for a moment its result where the task name is. */
+function noticeDone(prev: AppState, next: AppState) {
+  const before = prev.run;
+  if (!before) return;
+  const after = next.run?.id === before.id ? next.run : next.finished?.id === before.id ? next.finished : null;
+  if (!after) return;
+  const done = after.tasks.filter((t) => t.done && !isSection(after, t) && before.tasks.some((b) => b.id === t.id && !b.done));
+  if (!done.length) return;
+  if (after === next.finished) return void sfx('finish');
+  if (done.length > 1) return void sfx('done');
+  const t = done[0];
+  const best = prev.settings.race ? prev.bests[t.id] : undefined;
+  if (best && t.elapsedMs < best.ms) {
+    flash = { text: `★ NEW BEST  −${formatDuration(best.ms - t.elapsedMs)}`, tone: 'gold', until: Date.now() + 1600 };
+    sfx('best');
+  } else {
+    const ref = best?.ms ?? t.estimateMs;
+    const d = ref === undefined ? undefined : t.elapsedMs - ref;
+    flash = {
+      text: d === undefined ? `✓ ${t.title}  ${formatDuration(t.elapsedMs)}` : `✓ ${formatDuration(d, { signed: true })}${best ? ' on your best' : ''}`,
+      tone: d === undefined ? '' : d <= 0 ? 'ahead' : 'behind',
+      until: Date.now() + 1600,
+    };
+    sfx('done');
+  }
+  setTimeout(() => {
+    flash = null;
+    render();
+  }, 1650);
+}
+
 wire();
 api.onState((s) => {
+  const prev = state;
   state = s;
+  if (prev) noticeDone(prev, s);
   render();
 });
 state = await api.getState();

@@ -21,6 +21,9 @@
       </div>
       <div class="clock-row">
         <div class="clock" id="clock"><span id="hms">0:00:00</span><span class="ms" id="ms">.000</span></div>
+        <button class="reset" id="resetBtn" type="button" title="Reset: bad start? Run the template again from 0:00. This attempt won't count against your best." hidden>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3 2.6v3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <button class="go" id="go" type="button" title="Go / Pause (⌘⇧Space)">
           <svg class="play" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5z"/></svg>
           <svg class="pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg>
@@ -43,9 +46,13 @@
 
     <!-- Shown when a session ends: what you saved against your plan. -->
     <section class="summary" id="summary" hidden>
-      <div class="task">Session done</div>
+      <!-- The result: what "Copy" puts on the clipboard as a picture. -->
+      <div class="result" id="result">
+      <div class="task" id="sumTitle">Session done</div>
       <div class="clock" id="savedClock"><span id="savedHms">0:00:00</span><span class="ms" id="savedMs">.000</span></div>
       <div class="saved-label" id="savedLabel"></div>
+      <div class="rank" id="rankLine" hidden></div>
+      <ol class="medals" id="medals"></ol>
       <dl class="facts">
         <div><dt>Session</dt><dd id="factTotal"></dd></div>
         <div><dt>Pauses</dt><dd id="factPaused"></dd></div>
@@ -53,6 +60,7 @@
         <div><dt>Planned</dt><dd id="factPlanned"></dd></div>
         <div><dt>Actual</dt><dd id="factActual"></dd></div>
       </dl>
+      </div>
       <!-- All your sessions together: on tasks, and paused. -->
       <dl class="facts totals">
         <div><dt>Today</dt><dd id="totToday"></dd></div>
@@ -60,12 +68,17 @@
       </dl>
       <!-- Done with everything? Type the next task and keep the session going. -->
       <form class="add" id="continueForm">
-        <input id="continueInput" placeholder="Add a task and keep going, e.g. Emails 15m" autocomplete="off" />
+        <input id="continueInput" list="taskNames" placeholder="Add a task and keep going, e.g. Emails 15m" autocomplete="off" />
+      </form>
+      <form class="add" id="tplForm" hidden>
+        <input id="tplName" placeholder="Name this template, e.g. Morning routine" autocomplete="off" />
       </form>
       <div class="row">
+        <button class="text" id="saveTpl" type="button" title="Run these tasks again any time, and race your best">Save as template</button>
+        <button class="text" id="copyBtn" type="button" title="Copy this result as a picture">Copy</button>
         <button class="text" id="summaryStats" type="button">Stats</button>
         <span class="spacer"></span>
-        <button class="text" id="newSession" type="button">Start a new session</button>
+        <button class="text" id="newSession" type="button">New session</button>
       </div>
     </section>
 
@@ -78,32 +91,41 @@
           <li>The round button by the clock starts and pauses, or <kbd>⌘⇧Space</kbd> from any app</li>
           <li>The circle by the task name finishes it and shows the next, or <kbd>⌘⇧↩</kbd></li>
           <li>Hover a task and click <kbd>+</kbd> to give it subtasks</li>
+          <li>At the end of a session, save it as a template to run it again and race your best</li>
           <li>Click the clock to fold this away, drag it to move, drag its corner to resize</li>
         </ol>
         <button class="act primary small" id="tipsOk" type="button">Got it</button>
       </div>
       <div class="mode-row">
         <span class="delta" id="delta"></span>
+        <button class="race" id="race" type="button" hidden></button>
         <span class="spacer"></span>
         <button class="switch" id="countdownBtn" type="button" role="switch" title="Count down from the estimate instead of up">
           <span class="track"><span class="knob"></span></span>Countdown
         </button>
       </div>
 
+      <button class="not-same" id="notSame" type="button" hidden>Not the same task</button>
+
       <ol class="list" id="list"></ol>
 
+      <!-- An empty session: start one of your templates in one click. -->
+      <div class="chips" id="tplChips" hidden></div>
+
       <form class="add" id="addForm">
-        <input id="addInput" placeholder="Add a task, e.g. Write copy 30m" autocomplete="off" />
+        <input id="addInput" list="taskNames" placeholder="Add a task, e.g. Write copy 30m" autocomplete="off" />
       </form>
+      <datalist id="taskNames"></datalist>
 
       <div class="paste" id="paste" hidden>
         <textarea id="pasteText" rows="7" placeholder="- Write landing copy 45m&#10;- Build page&#10;  - Hero section 1h&#10;- [ ] Reply to emails 15m"></textarea>
         <div class="row">
           <button class="text" id="pasteFile" type="button">Open a file</button>
           <span class="spacer"></span>
-          <button class="text" id="pasteCancel" type="button">Cancel</button>
+          <button class="text" id="pasteTpl" type="button">Save as template</button>
           <button class="act primary small" id="pasteGo" type="button">Add tasks</button>
         </div>
+        <input id="pasteTplName" placeholder="Name this template, then Enter" autocomplete="off" hidden />
       </div>
 
 
