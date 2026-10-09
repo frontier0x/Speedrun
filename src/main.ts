@@ -557,12 +557,16 @@ function hideDockIfNoWindows() {
 
 // ---------- tray ----------
 
+/** The menu bar shows just the Speedrun icon; what's running is in its tooltip. */
 function refreshTray() {
   if (!tray) return;
+  tray.setTitle('');
   const active = activeTask();
-  if (!run || !active) return tray.setTitle(run ? `⏱ ${formatDuration(runElapsed(run))}` : '⏱');
-  const icon = run.activeSince !== undefined ? '⏱' : '⏸';
-  tray.setTitle(`${icon} ${active.title.slice(0, 22)} ${formatDuration(liveElapsed(run, active))}`);
+  tray.setToolTip(
+    !run || !active
+      ? 'Speedrun'
+      : `${active.title}: ${formatDuration(liveElapsed(run, active))}${run.activeSince === undefined ? ' (paused)' : ''}`,
+  );
 }
 
 function buildMenu() {
