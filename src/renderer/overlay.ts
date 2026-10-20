@@ -30,6 +30,7 @@ function applyTheme() {
   // Widths from dragging the side edges; unset, the timer hugs its clock (folded) or is 320px (open).
   root.setProperty('--open-w', (s.openWidth ?? 320) + 'px');
   root.setProperty('--folded-w', s.foldedWidth ? s.foldedWidth + 'px' : '0px');
+  root.setProperty('--list-h', (s.listHeight ?? 186) + 'px');
 }
 
 const sfx = (sound: Sound) => ui.state.settings.sounds && play(sound, ui.state.settings.volume);
@@ -386,12 +387,20 @@ function wire() {
     edge.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const side = edge.dataset.edge as 'left' | 'right';
+      const side = edge.dataset.edge as 'left' | 'right' | 'bottom';
       const startX = e.screenX;
+      const startY = e.screenY;
       const startWidth = $('panel').offsetWidth;
+      // The bottom edge sizes the list; it starts from however tall the list is now.
+      const startHeight = Math.max($('list').offsetHeight, 60);
       void api.act({ type: 'dragStart', mode: side, open: isOpen(), width: startWidth });
-      // screenX is in the page's own pixels, so this works at any zoom and while the window grows.
-      const move = (m: MouseEvent) => void api.act({ type: 'dragWidth', width: startWidth + (side === 'left' ? startX - m.screenX : m.screenX - startX) });
+      // screenX/Y are in the page's own pixels, so this works at any zoom and while the window grows.
+      const move = (m: MouseEvent) =>
+        void api.act(
+          side === 'bottom'
+            ? { type: 'dragHeight', height: startHeight + m.screenY - startY }
+            : { type: 'dragWidth', width: startWidth + (side === 'left' ? startX - m.screenX : m.screenX - startX) },
+        );
       const up = () => {
         window.removeEventListener('mousemove', move);
         window.removeEventListener('mouseup', up);

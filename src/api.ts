@@ -55,10 +55,11 @@ export type Action =
   | { type: 'settings'; patch: Partial<Settings> }
   | { type: 'endRun' }
   | { type: 'fitSize'; width: number; height: number }
-  | { type: 'dragStart'; mode: 'move' | 'resize' | 'left' | 'right'; open?: boolean; width?: number }
+  | { type: 'dragStart'; mode: 'move' | 'resize' | 'left' | 'right' | 'bottom'; open?: boolean; width?: number }
   | { type: 'place'; id: string; targetId: string; where: 'before' | 'after' | 'into' }
   | { type: 'restartRun' }
   | { type: 'dragWidth'; width: number }
+  | { type: 'dragHeight'; height: number }
   | { type: 'dragMove' }
   | { type: 'dragEnd' }
   | { type: 'openDashboard' }

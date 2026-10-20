@@ -76,6 +76,8 @@ export interface Settings {
   openWidth?: number;
   /** Folded, the timer is at least this wide (it always fits the clock), from dragging an edge. */
   foldedWidth?: number;
+  /** Height of the task list in the open timer, from dragging its bottom edge. */
+  listHeight?: number;
   /** The first-start tips have been seen. */
   onboarded: boolean;
   /** We've turned on "Open at login" once, on first start; after that it's yours to switch. */

@@ -189,19 +189,22 @@ function draggable(li: HTMLLIElement, t: Task) {
       void api.act({ type: e.shiftKey ? 'outdent' : 'indent', id: t.id });
     } else if (e.key === 'Enter') li.click();
   });
-  // Drag by the handle on the left: drop on the top or bottom of a task to put it above or below,
-  // on its middle to make it a subtask. Subtasks always come along.
-  const handle = el('span', 'handle', '⋮⋮');
-  handle.title = 'Drag to move. Drop on the middle of a task to make it a subtask.';
-  handle.onclick = (e) => e.stopPropagation();
-  handle.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    handle.setPointerCapture(e.pointerId);
-    li.classList.add('dragging');
+  // Press and hold anywhere on a task, then move: it follows you. Drop it on the top or bottom of a
+  // task to put it above or below, on its middle to make it a subtask. Subtasks always come along.
+  // A plain click still works as a click; buttons, the circle and fields inside the row aren't grabbed.
+  li.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('button, input, textarea, .box, .time-edit')) return;
+    const start = { x: e.clientX, y: e.clientY };
+    let dragging = false;
     let drop: { id: string; where: 'before' | 'after' | 'into' } | null = null;
     const clear = () => $('list').querySelectorAll('.drop-before, .drop-after, .drop-into').forEach((x) => x.classList.remove('drop-before', 'drop-after', 'drop-into'));
     const move = (m: PointerEvent) => {
+      if (!dragging) {
+        if (Math.hypot(m.clientX - start.x, m.clientY - start.y) < 5) return;
+        dragging = true;
+        li.classList.add('dragging');
+        document.body.classList.add('dragging-task');
+      }
       clear();
       const over = document.elementFromPoint(m.clientX, m.clientY)?.closest<HTMLElement>('.list li[data-id]');
       if (!over || over === li) return (drop = null);
@@ -210,20 +213,27 @@ function draggable(li: HTMLLIElement, t: Task) {
       const where = f < 0.3 ? 'before' : f > 0.7 ? 'after' : 'into';
       over.classList.add('drop-' + where);
       drop = { id: over.dataset.id!, where };
+      // Near the top or bottom of the list, it scrolls along.
+      const list = $('list').getBoundingClientRect();
+      if (m.clientY < list.top + 16) $('list').scrollTop -= 8;
+      else if (m.clientY > list.bottom - 16) $('list').scrollTop += 8;
     };
     const up = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', up);
-      handle.removeEventListener('pointercancel', up);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      if (!dragging) return;
       li.classList.remove('dragging');
+      document.body.classList.remove('dragging-task');
       clear();
+      // The click that ends a drag isn't a click on the task.
+      li.addEventListener('click', (c) => c.stopImmediatePropagation(), { capture: true, once: true });
       if (drop) void api.act({ type: 'place', id: t.id, targetId: drop.id, where: drop.where });
     };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', up);
-    handle.addEventListener('pointercancel', up);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   });
-  li.prepend(handle);
 }
 
 /** While a task runs: its estimate, until it goes over; then how far over, in red. */
