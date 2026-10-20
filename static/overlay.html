@@ -21,7 +21,7 @@
       </div>
       <div class="clock-row">
         <div class="clock" id="clock"><span id="hms">0:00:00</span><span class="ms" id="ms">.000</span></div>
-        <button class="reset" id="resetBtn" type="button" title="Reset: bad start? Run the template again from 0:00. This attempt won't count against your best." hidden>
+        <button class="reset" id="resetBtn" type="button" title="Restart the session from 0:00" hidden>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3 2.6v3.2h3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <button class="go" id="go" type="button" title="Go / Pause (⌘⇧Space)">
@@ -140,6 +140,9 @@
       </div>
     </section>
     <div class="grip" id="grip" title="Drag to resize"></div>
+    <!-- The side edges make the timer wider (or narrower) without changing the text size. -->
+    <div class="edge left" data-edge="left" title="Drag to make the timer wider"></div>
+    <div class="edge right" data-edge="right" title="Drag to make the timer wider"></div>
   </main>
   <script type="module" src="../dist/renderer/overlay.js"></script>
 </body>

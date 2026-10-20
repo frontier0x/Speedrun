@@ -27,6 +27,9 @@ function applyTheme() {
   root.setProperty('--button-ink', inkFor(paintSolid(colors.button)));
   root.setProperty('--clock-weight', String(s.clockWeight));
   document.body.classList.toggle('style-speedrun', s.clockStyle === 'speedrun');
+  // Widths from dragging the side edges; unset, the timer hugs its clock (folded) or is 320px (open).
+  root.setProperty('--open-w', (s.openWidth ?? 320) + 'px');
+  root.setProperty('--folded-w', s.foldedWidth ? s.foldedWidth + 'px' : '0px');
 }
 
 const sfx = (sound: Sound) => ui.state.settings.sounds && play(sound, ui.state.settings.volume);
@@ -56,7 +59,8 @@ function renderFace() {
     task.textContent = flash.text;
     task.className = 'task flash ' + flash.tone;
   }
-  $('resetBtn').hidden = !run?.templateId;
+  $('resetBtn').hidden = !run?.tasks.length;
+  $('resetBtn').title = run?.templateId ? "Restart this run from 0:00. It won't count against your best." : 'Restart the session from 0:00';
   $('tick').hidden = !t;
   $('go').hidden = !t;
   $('go').classList.toggle('running', isRunning());
@@ -290,21 +294,9 @@ function wire() {
     if (!t) return;
     void (ui.state.run?.activeTaskId === t.id ? api.act({ type: 'split' }) : api.act({ type: 'toggleDone', id: t.id }));
   };
-  // Reset: the first click arms it, a second within 3 seconds throws the attempt away and starts the route over.
+  // Restart: start the whole session over; Speedrun asks first.
   $('resetBtn').addEventListener('mousedown', (e) => e.stopPropagation());
-  let armed: ReturnType<typeof setTimeout> | undefined;
-  $('resetBtn').onclick = () => {
-    const b = $('resetBtn');
-    if (!b.classList.contains('armed')) {
-      b.classList.add('armed');
-      b.title = 'Click again to reset this run';
-      armed = setTimeout(() => b.classList.remove('armed'), 3000);
-      return;
-    }
-    clearTimeout(armed);
-    b.classList.remove('armed');
-    void api.act({ type: 'resetRun' });
-  };
+  $('resetBtn').onclick = () => void api.act({ type: 'restartRun' });
   $('race').onclick = () => {
     if ($('race').classList.contains('fuzzy')) $('notSame').hidden = !$('notSame').hidden;
   };
@@ -389,6 +381,26 @@ function wire() {
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
   });
+  // The side edges: only the width changes, the text keeps its size.
+  for (const edge of document.querySelectorAll<HTMLElement>('[data-edge]')) {
+    edge.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const side = edge.dataset.edge as 'left' | 'right';
+      const startX = e.screenX;
+      const startWidth = $('panel').offsetWidth;
+      void api.act({ type: 'dragStart', mode: side, open: isOpen(), width: startWidth });
+      // screenX is in the page's own pixels, so this works at any zoom and while the window grows.
+      const move = (m: MouseEvent) => void api.act({ type: 'dragWidth', width: startWidth + (side === 'left' ? startX - m.screenX : m.screenX - startX) });
+      const up = () => {
+        window.removeEventListener('mousemove', move);
+        window.removeEventListener('mouseup', up);
+        void api.act({ type: 'dragEnd' });
+      };
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', up);
+    });
+  }
   $('summaryStats').onclick = () => void api.act({ type: 'openDashboard' });
   $('saveTpl').onclick = () => {
     const fin = ui.state.finished;

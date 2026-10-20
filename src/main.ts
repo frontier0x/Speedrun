@@ -6,7 +6,7 @@ import type { Action, AppState } from './api.js';
 import {
   addSubtask, addTasks, bestFor, bestIndex, clampScale, completeActive, endPause, formatDuration, formatEstimate, goldSplits, isSection, liveElapsed, matchKey,
   indentTask, moveTask, shiftTask, newRun, outdentTask, nextTask, pairKey, parseDuration, parseQuickAdd, parseTaskList, parseTimeInput, pause, pausedTotal, reopenTask, runFromTemplate, setElapsed,
-  removeTask, runElapsed, startTask, summarize, templateFromRun, templateFromText, templateRecord, toggleDone, type Best, type Run, type Settings,
+  placeTask, removeTask, restartRun, runElapsed, startTask, summarize, templateFromRun, templateFromText, templateRecord, toggleDone, type Best, type Run, type Settings,
   type Template,
 } from './runs.js';
 import { RunStore } from './runStore.js';
@@ -31,7 +31,7 @@ let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
 let dashboard: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
-let drag: { mode: 'move' | 'resize'; cursor: Electron.Point; bounds: Electron.Rectangle; scale: number } | null = null;
+let drag: { mode: 'move' | 'resize' | 'left' | 'right'; cursor: Electron.Point; bounds: Electron.Rectangle; scale: number; open?: boolean; width?: number } | null = null;
 
 const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 
@@ -299,6 +299,28 @@ async function act(a: Action) {
       templates = templates.filter((t) => t.id !== a.id);
       persistTemplates();
       break;
+    case 'place':
+      if (run) placeTask(run, a.id, a.targetId, a.where);
+      break;
+    case 'restartRun': {
+      // Start the whole session over, after asking. A template run counts as a reset attempt.
+      if (!run?.tasks.length) break;
+      const { response } = await dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Restart', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+        message: run.templateId ? 'Restart this run?' : 'Restart this session?',
+        detail: run.templateId
+          ? "Every task goes back to 0:00. This attempt is kept as a reset, so it won't count against your best."
+          : 'Every task goes back to 0:00 and is open again. The time you spent so far is cleared.',
+      });
+      if (response !== 0) return;
+      if (run.templateId) return act({ type: 'resetRun' });
+      if (countIn) (clearTimeout(countIn.timer), (countIn = null));
+      restartRun(run, Date.now());
+      break;
+    }
     case 'resetRun': {
       // A bad start: this attempt is kept for your totals but never counts as a run, and the route starts over.
       if (!run?.templateId) break;
@@ -395,7 +417,7 @@ async function act(a: Action) {
     // Dragging reads the cursor here, in screen pixels, so it works at any zoom.
     case 'dragStart':
       if (overlay && !overlay.isDestroyed())
-        drag = { mode: a.mode, cursor: screen.getCursorScreenPoint(), bounds: overlay.getBounds(), scale: settings.scale };
+        drag = { mode: a.mode, cursor: screen.getCursorScreenPoint(), bounds: overlay.getBounds(), scale: settings.scale, open: a.open, width: a.width };
       return;
     case 'dragMove': {
       if (!drag || !overlay || overlay.isDestroyed()) return;
@@ -403,6 +425,7 @@ async function act(a: Action) {
       const dx = p.x - drag.cursor.x;
       const dy = p.y - drag.cursor.y;
       if (drag.mode === 'move') overlay.setPosition(Math.round(drag.bounds.x + dx), Math.round(drag.bounds.y + dy));
+      else if (drag.mode === 'left' || drag.mode === 'right') return;
       else {
         const scale = clampScale((drag.scale * (drag.bounds.width + dx)) / drag.bounds.width);
         if (scale !== settings.scale) {
@@ -412,8 +435,16 @@ async function act(a: Action) {
       }
       return;
     }
+    case 'dragWidth': {
+      // A side edge: only the width changes, in CSS pixels, so the text stays the same size.
+      if (!drag || (drag.mode !== 'left' && drag.mode !== 'right')) return;
+      const width = Math.round(Math.max(drag.open ? 260 : 120, Math.min(900, a.width)));
+      settings = drag.open ? { ...settings, openWidth: width } : { ...settings, foldedWidth: width };
+      broadcast();
+      return;
+    }
     case 'dragEnd':
-      if (drag?.mode === 'resize') persistSettings();
+      if (drag && drag.mode !== 'move') persistSettings();
       else saveOverlayPosition();
       drag = null;
       break;
@@ -425,7 +456,15 @@ async function act(a: Action) {
         const height = Math.max(40, Math.min(1400, Math.ceil(a.height * settings.scale)));
         // Grow toward the middle of the screen, so a timer parked on the right edge stays on screen.
         const area = screen.getDisplayMatching(b).workArea;
-        const x = drag?.mode !== 'resize' && b.x + b.width / 2 > area.x + area.width / 2 ? b.x + b.width - width : b.x;
+        // Dragging the left edge keeps the right side in place; the right edge keeps the left.
+        const x =
+          drag?.mode === 'left'
+            ? drag.bounds.x + drag.bounds.width - width
+            : drag?.mode === 'right' || drag?.mode === 'resize'
+              ? b.x
+              : b.x + b.width / 2 > area.x + area.width / 2
+                ? b.x + b.width - width
+                : b.x;
         if (b.width !== width || b.height !== height) overlay.setBounds({ x, y: b.y, width, height });
       }
       return;

@@ -40,7 +40,9 @@ minus. Settings has **Count pauses in the session** (off by default, so pauses d
 time).
 
 Hover the timer for **–** (hide to the menu bar) and **×** (quit). Drag its bottom-right corner to make it
-bigger or smaller.
+bigger or smaller; drag its left or right edge to make it only wider (or narrower), so long task names fit
+while the text keeps its size. Open, the round **↺** next to pause restarts the whole session from 0:00,
+after asking.
 
 **Settings** (in the open panel, or the menu bar icon) has day/night/auto mode, size, clock weight, whether
 the clock shows milliseconds and seconds, and every color. Each color can be solid or a gradient; type any
@@ -51,7 +53,9 @@ Click the clock to open the rest (drag it to move it). Open, the task under the 
 - **Shortcuts**: `⌘⇧Space` is go/pause and `⌘⇧↩` is done, from any app.
 - **Your list** stays in your order: new tasks go at the end and finished ones stay where they are. Select
   a task (click its row's empty space or use ↑/↓) and press `⌥↑` / `⌥↓` to move it, with its subtasks;
-  `Tab` / `Shift+Tab` nest it. Click a task to switch to it, drag to reorder, double-click to rename, click its
+  `Tab` / `Shift+Tab` nest it. Or drag it by the **⋮⋮** handle on its left: drop it on the top or bottom of
+  another task to put it above or below, on its middle to make it that task's subtask. Click a task to
+  switch to it, double-click to rename, click its
   estimate to change it. Once a task has time on it, its estimate shows how far under (green) or over
   (red) you are, live. Finished tasks show their time and how far under or over the estimate they
   were, in gold if you beat your best time for that task. Estimates: pick 5m to 2h or type any time.

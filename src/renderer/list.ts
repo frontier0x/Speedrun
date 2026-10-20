@@ -58,7 +58,6 @@ export function closePicker() {
   ui.editing = false;
 }
 
-let dragId: string | null = null;
 
 export function renderList() {
   const list = $('list');
@@ -190,22 +189,41 @@ function draggable(li: HTMLLIElement, t: Task) {
       void api.act({ type: e.shiftKey ? 'outdent' : 'indent', id: t.id });
     } else if (e.key === 'Enter') li.click();
   });
-  li.draggable = true;
-  li.ondragstart = (e) => {
+  // Drag by the handle on the left: drop on the top or bottom of a task to put it above or below,
+  // on its middle to make it a subtask. Subtasks always come along.
+  const handle = el('span', 'handle', '⋮⋮');
+  handle.title = 'Drag to move. Drop on the middle of a task to make it a subtask.';
+  handle.onclick = (e) => e.stopPropagation();
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
     e.stopPropagation();
-    dragId = t.id;
-  };
-  li.ondragend = () => (dragId = null);
-  li.ondragover = (e) => {
-    e.preventDefault();
-    li.classList.add('drop');
-  };
-  li.ondragleave = () => li.classList.remove('drop');
-  li.ondrop = (e) => {
-    e.preventDefault();
-    li.classList.remove('drop');
-    if (dragId && dragId !== t.id) void api.act({ type: 'move', id: dragId, beforeId: t.id });
-  };
+    handle.setPointerCapture(e.pointerId);
+    li.classList.add('dragging');
+    let drop: { id: string; where: 'before' | 'after' | 'into' } | null = null;
+    const clear = () => $('list').querySelectorAll('.drop-before, .drop-after, .drop-into').forEach((x) => x.classList.remove('drop-before', 'drop-after', 'drop-into'));
+    const move = (m: PointerEvent) => {
+      clear();
+      const over = document.elementFromPoint(m.clientX, m.clientY)?.closest<HTMLElement>('.list li[data-id]');
+      if (!over || over === li) return (drop = null);
+      const r = over.getBoundingClientRect();
+      const f = (m.clientY - r.top) / r.height;
+      const where = f < 0.3 ? 'before' : f > 0.7 ? 'after' : 'into';
+      over.classList.add('drop-' + where);
+      drop = { id: over.dataset.id!, where };
+    };
+    const up = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      li.classList.remove('dragging');
+      clear();
+      if (drop) void api.act({ type: 'place', id: t.id, targetId: drop.id, where: drop.where });
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  });
+  li.prepend(handle);
 }
 
 /** While a task runs: its estimate, until it goes over; then how far over, in red. */
