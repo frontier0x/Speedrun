@@ -5,7 +5,7 @@ import {
   parseTaskList, projectedRemaining, removeTask, resume, runEstimate, startTask, summarize, totalElapsed,
   pause, pausedTotal, sessionElapsed, timeSaved, totalEstimate, parseTimeInput, reopenTask, setElapsed,
   addSubtask, toggleDone, ancestorsOf, matchKey, similarity, templateFromRun, runFromTemplate, templateRecord, templateToText,
-  templateFromText, indentTask, outdentTask, bestFor, bestIndex, pbPace, medal, pairKey, type Run, shiftTask,
+  templateFromText, indentTask, outdentTask, bestFor, bestIndex, pbPace, medal, pairKey, type Run, shiftTask, placeTask, restartRun,
 } from './runs.js';
 
 const MIN = 60_000;
@@ -295,4 +295,35 @@ test('⌥↑ and ⌥↓ move a task with its subtasks past the next task at its 
   assert.equal(titles(), 'Copy,Headline,Emails,Page,Pricing,Hero');
   shiftTask(run, copy.id, -1); // already first: nothing happens
   assert.equal(titles(), 'Copy,Headline,Emails,Page,Pricing,Hero');
+});
+
+test('drag and drop: above, below, or into a task as its subtask', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- Page\n  - Hero\n- Copy\n  - Headline\n- Emails'));
+  const [page, hero, copy, , emails] = run.tasks;
+  const titles = () => run.tasks.map((t) => (t.parentId ? run.tasks.find((p) => p.id === t.parentId)!.title + ' > ' : '') + t.title).join(', ');
+  placeTask(run, emails.id, page.id, 'before');
+  assert.equal(titles(), 'Emails, Page, Page > Hero, Copy, Copy > Headline');
+  placeTask(run, emails.id, page.id, 'after'); // after Page and its subtasks
+  assert.equal(titles(), 'Page, Page > Hero, Emails, Copy, Copy > Headline');
+  placeTask(run, emails.id, page.id, 'into'); // last subtask of Page
+  assert.equal(titles(), 'Page, Page > Hero, Page > Emails, Copy, Copy > Headline');
+  placeTask(run, copy.id, hero.id, 'into'); // into a subtask means into its task; Copy's subtask comes along
+  assert.equal(titles(), 'Page, Page > Hero, Page > Emails, Page > Copy, Page > Headline');
+  placeTask(run, hero.id, copy.id, 'after'); // a subtask can move among its siblings
+  assert.equal(titles(), 'Page, Page > Emails, Page > Copy, Page > Hero, Page > Headline');
+  placeTask(run, page.id, hero.id, 'into'); // can't go into itself
+  assert.equal(titles(), 'Page, Page > Emails, Page > Copy, Page > Hero, Page > Headline');
+});
+
+test('restart puts every task back to 0:00, open, with the clock stopped', () => {
+  const run = newRun('manual', new Date(0));
+  addTasks(run, parseTaskList('- A 10m\n- B'));
+  startTask(run, run.tasks[0].id, 0);
+  completeActive(run, 5 * MIN);
+  pause(run, 6 * MIN);
+  restartRun(run, 10 * MIN);
+  assert.ok(run.tasks.every((t) => t.elapsedMs === 0 && !t.done));
+  assert.equal(run.activeSince, undefined);
+  assert.equal(pausedTotal(run, 11 * MIN), 0);
 });

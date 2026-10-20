@@ -52,6 +52,19 @@ try {
       pending.set(++id, (d) => (d.result?.exceptionDetails ? reject(new Error(d.result.exceptionDetails.exception?.description)) : resolve(d.result?.result?.value)));
       ws.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression: `(async () => { ${expression} })()`, awaitPromise: true, returnByValue: true } }));
     });
+  /** A real mouse event (it also makes pointer events), in the timer's CSS pixels. */
+  const mouse = (type, x, y) =>
+    new Promise((resolve) => {
+      pending.set(++id, resolve);
+      ws.send(JSON.stringify({ id, method: 'Input.dispatchMouseEvent', params: { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 } }));
+    });
+  const dragFrom = async (from, to) => {
+    await mouse('mouseMoved', from.x, from.y);
+    await mouse('mousePressed', from.x, from.y);
+    for (let i = 1; i <= 8; i++) await mouse('mouseMoved', from.x + ((to.x - from.x) * i) / 8, from.y + ((to.y - from.y) * i) / 8);
+    await mouse('mouseReleased', to.x, to.y);
+    await wait(400);
+  };
   const act = (a) => run(`await window.speedrun.act(${JSON.stringify(a)}); await new Promise(r => setTimeout(r, 300));`);
   const state = () => run('return await window.speedrun.getState();');
   const open = () => run(`if (document.getElementById('more').hidden) { document.getElementById('face').dispatchEvent(new MouseEvent('mousedown', { button: 0, screenX: 5, screenY: 5 })); window.dispatchEvent(new MouseEvent('mouseup')); } await new Promise(r => setTimeout(r, 300));`);
@@ -75,6 +88,31 @@ try {
   check('open: group and session lines show', await run(`return ['group', 'session'].every((id) => getComputedStyle(document.getElementById(id)).display !== 'none')`));
   check('open: task, then session', await run(`return ${y('task')} < ${y('sessionTime')}`));
 
+  // Drag Emails by its handle onto the middle of Page: it becomes Page's subtask.
+  s = await state();
+  const rect = (sel) => run(`const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height };`);
+  const emailsId = s.run.tasks.find((t) => t.title === 'Emails').id;
+  const pageId = s.run.tasks.find((t) => t.title === 'Page').id;
+  await run(`document.querySelector('.list li[data-id="${emailsId}"]').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))`);
+  const handle = await rect(`.list li[data-id="${emailsId}"] .handle`);
+  const page = await rect(`.list li[data-id="${pageId}"]`);
+  await dragFrom(handle, { x: page.x, y: page.y });
+  s = await state();
+  check('drag onto a task makes it a subtask', s.run.tasks.find((t) => t.title === 'Emails').parentId === pageId);
+  const page2 = await rect(`.list li[data-id="${pageId}"]`);
+  const handle2 = await rect(`.list li[data-id="${emailsId}"] .handle`);
+  await dragFrom(handle2, { x: page2.x, y: page2.y - page2.h * 0.4 });
+  s = await state();
+  check('drag onto the top of a task puts it above, as a task', !s.run.tasks.find((t) => t.title === 'Emails').parentId && s.run.tasks[0].title === 'Emails');
+
+  // The right edge makes the open timer wider; the text keeps its size.
+  const before = await run(`return { w: document.getElementById('panel').offsetWidth, f: getComputedStyle(document.getElementById('hms')).fontSize }`);
+  const edge = await rect('.edge.right');
+  await dragFrom(edge, { x: edge.x + 80, y: edge.y });
+  await wait(300);
+  const after = await run(`return { w: document.getElementById('panel').offsetWidth, f: getComputedStyle(document.getElementById('hms')).fontSize }`);
+  check('the side edge widens the timer, text stays the same size', after.w > before.w + 40 && after.f === before.f, `${before.w}→${after.w}`);
+
   await run(`const i = document.getElementById('addInput'); i.value = 'Invoices 10m'; document.getElementById('addForm').requestSubmit(); await new Promise(r => setTimeout(r, 300));`);
   s = await state();
   check('a new task goes at the end', s.run.tasks.at(-1).title === 'Invoices' && !s.run.tasks.at(-1).parentId);
@@ -86,7 +124,9 @@ try {
 
   await act({ type: 'split' });
   s = await state();
-  check('Done moves on to the next task', s.run.tasks.find((t) => t.title === 'Hero').done && s.run.tasks.find((t) => t.id === s.run.activeTaskId)?.title === 'Pricing');
+  // The next task is the first open one in your order (Emails, which the drag above put on top).
+  const firstOpen = s.run.tasks.find((t) => !t.done && !s.run.tasks.some((c) => c.parentId === t.id));
+  check('Done moves on to the next task', s.run.tasks.find((t) => t.title === 'Hero').done && s.run.activeTaskId === firstOpen?.id);
 
   for (let i = 0; i < 4; i++) await act({ type: 'split' });
   s = await state();

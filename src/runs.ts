@@ -72,6 +72,10 @@ export interface Settings {
   precision: 'ms' | 's' | 'm';
   /** Size of the floating timer, 1 = normal. */
   scale: number;
+  /** Width of the open timer in CSS pixels, from dragging its left or right edge. Text size stays. */
+  openWidth?: number;
+  /** Folded, the timer is at least this wide (it always fits the clock), from dragging an edge. */
+  foldedWidth?: number;
   /** The first-start tips have been seen. */
   onboarded: boolean;
   /** We've turned on "Open at login" once, on first start; after that it's yours to switch. */
@@ -515,6 +519,65 @@ export function moveTask(run: Run, id: string, beforeId: string | null): Run {
   const at = before ? rest.indexOf(before) : -1;
   run.tasks = at < 0 ? [...rest, ...moving] : [...rest.slice(0, at), ...moving, ...rest.slice(at)];
   if (oldParent !== t.parentId) reparented(run, t);
+  return run;
+}
+
+/**
+ * Drag and drop: puts a task (with its subtasks) above or below another, or into it as its last subtask.
+ * Two levels only: dropped into a subtask, it goes into that subtask's task; a task with subtasks that
+ * becomes a subtask hands its subtasks to the new parent.
+ */
+export function placeTask(run: Run, id: string, targetId: string, where: 'before' | 'after' | 'into'): Run {
+  const t = run.tasks.find((x) => x.id === id);
+  let target = run.tasks.find((x) => x.id === targetId);
+  if (!t || !target || t.id === target.id) return run;
+  const block = new Set([id, ...descendantsOf(run, id).map((d) => d.id)]);
+  if (block.has(target.id)) return run;
+  if (where === 'into' && target.parentId) {
+    target = run.tasks.find((x) => x.id === target!.parentId)!;
+    where = 'into';
+  }
+  const parentId = where === 'into' ? target.id : target.parentId;
+  const oldParent = t.parentId;
+  const moving = run.tasks.filter((x) => block.has(x.id));
+  const rest = run.tasks.filter((x) => !block.has(x.id));
+  let at: number;
+  if (where === 'before') at = rest.indexOf(target);
+  else {
+    // After the target and everything under it.
+    const under = new Set([target.id, ...descendantsOf({ ...run, tasks: rest }, target.id).map((d) => d.id)]);
+    at = Math.max(...rest.map((x, i) => (under.has(x.id) ? i : -1))) + 1;
+  }
+  t.parentId = parentId;
+  if (parentId) for (const c of moving) if (c.parentId === t.id) c.parentId = parentId;
+  run.tasks = [...rest.slice(0, at), ...moving, ...rest.slice(at)];
+  if (t.parentId) {
+    const parent = run.tasks.find((x) => x.id === t.parentId)!;
+    if (parent.done && !t.done) {
+      parent.done = false;
+      parent.doneAt = undefined;
+    }
+  }
+  if (oldParent !== t.parentId) reparented(run, t);
+  return run;
+}
+
+/**
+ * Restart: the whole session goes back to the start. Every task is open again at 0:00, pauses are
+ * cleared and the clock stops until you press go.
+ */
+export function restartRun(run: Run, now = Date.now()): Run {
+  for (const t of run.tasks) {
+    t.elapsedMs = 0;
+    t.done = false;
+    t.doneAt = undefined;
+  }
+  run.activeTaskId = undefined;
+  run.activeSince = undefined;
+  run.pausedMs = 0;
+  run.pausedSince = undefined;
+  run.endedAt = undefined;
+  run.startedAt = new Date(now).toISOString();
   return run;
 }
 
