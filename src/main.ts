@@ -31,7 +31,7 @@ let tray: Tray | null = null;
 let overlay: BrowserWindow | null = null;
 let dashboard: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
-let drag: { mode: 'move' | 'resize' | 'left' | 'right'; cursor: Electron.Point; bounds: Electron.Rectangle; scale: number; open?: boolean; width?: number } | null = null;
+let drag: { mode: 'move' | 'resize' | 'left' | 'right' | 'bottom'; cursor: Electron.Point; bounds: Electron.Rectangle; scale: number; open?: boolean; width?: number } | null = null;
 
 const activeTask = () => run?.tasks.find((t) => t.id === run?.activeTaskId);
 
@@ -425,7 +425,7 @@ async function act(a: Action) {
       const dx = p.x - drag.cursor.x;
       const dy = p.y - drag.cursor.y;
       if (drag.mode === 'move') overlay.setPosition(Math.round(drag.bounds.x + dx), Math.round(drag.bounds.y + dy));
-      else if (drag.mode === 'left' || drag.mode === 'right') return;
+      else if (drag.mode === 'left' || drag.mode === 'right' || drag.mode === 'bottom') return;
       else {
         const scale = clampScale((drag.scale * (drag.bounds.width + dx)) / drag.bounds.width);
         if (scale !== settings.scale) {
@@ -443,6 +443,12 @@ async function act(a: Action) {
       broadcast();
       return;
     }
+    case 'dragHeight':
+      // The bottom edge: the task list gets taller or shorter; the window follows.
+      if (drag?.mode !== 'bottom') return;
+      settings = { ...settings, listHeight: Math.round(Math.max(60, Math.min(1000, a.height))) };
+      broadcast();
+      return;
     case 'dragEnd':
       if (drag && drag.mode !== 'move') persistSettings();
       else saveOverlayPosition();
@@ -460,7 +466,7 @@ async function act(a: Action) {
         const x =
           drag?.mode === 'left'
             ? drag.bounds.x + drag.bounds.width - width
-            : drag?.mode === 'right' || drag?.mode === 'resize'
+            : drag?.mode === 'right' || drag?.mode === 'resize' || drag?.mode === 'bottom'
               ? b.x
               : b.x + b.width / 2 > area.x + area.width / 2
                 ? b.x + b.width - width

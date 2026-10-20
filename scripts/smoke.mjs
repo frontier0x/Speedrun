@@ -88,22 +88,40 @@ try {
   check('open: group and session lines show', await run(`return ['group', 'session'].every((id) => getComputedStyle(document.getElementById(id)).display !== 'none')`));
   check('open: task, then session', await run(`return ${y('task')} < ${y('sessionTime')}`));
 
-  // Drag Emails by its handle onto the middle of Page: it becomes Page's subtask.
+  // Press on Emails and drag it onto the middle of Page: it becomes Page's subtask.
   s = await state();
   const rect = (sel) => run(`const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height };`);
   const emailsId = s.run.tasks.find((t) => t.title === 'Emails').id;
   const pageId = s.run.tasks.find((t) => t.title === 'Page').id;
-  await run(`document.querySelector('.list li[data-id="${emailsId}"]').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))`);
-  const handle = await rect(`.list li[data-id="${emailsId}"] .handle`);
+  const handle = await rect(`.list li[data-id="${emailsId}"] .name`);
   const page = await rect(`.list li[data-id="${pageId}"]`);
   await dragFrom(handle, { x: page.x, y: page.y });
   s = await state();
   check('drag onto a task makes it a subtask', s.run.tasks.find((t) => t.title === 'Emails').parentId === pageId);
   const page2 = await rect(`.list li[data-id="${pageId}"]`);
-  const handle2 = await rect(`.list li[data-id="${emailsId}"] .handle`);
+  const handle2 = await rect(`.list li[data-id="${emailsId}"] .name`);
   await dragFrom(handle2, { x: page2.x, y: page2.y - page2.h * 0.4 });
   s = await state();
   check('drag onto the top of a task puts it above, as a task', !s.run.tasks.find((t) => t.title === 'Emails').parentId && s.run.tasks[0].title === 'Emails');
+  check('a drag is not a click (the clock stays on its task)', s.run.tasks.find((t) => t.id === s.run.activeTaskId)?.title === 'Hero');
+
+  // A plain click still switches to the task.
+  const emailsRow = await rect(`.list li[data-id="${emailsId}"] .name`);
+  await mouse('mouseMoved', emailsRow.x, emailsRow.y);
+  await mouse('mousePressed', emailsRow.x, emailsRow.y);
+  await mouse('mouseReleased', emailsRow.x, emailsRow.y);
+  await wait(400);
+  s = await state();
+  check('a click on a task switches to it', s.run.activeTaskId === emailsId);
+  await act({ type: 'start', id: s.run.tasks.find((t) => t.title === 'Hero').id });
+
+  // The bottom edge makes the list shorter (or taller).
+  const listBefore = await run(`return document.getElementById('list').offsetHeight`);
+  const bottom = await rect('.edge.bottom');
+  await dragFrom(bottom, { x: bottom.x, y: bottom.y - 40 });
+  await wait(300);
+  const listAfter = await run(`return document.getElementById('list').offsetHeight`);
+  check('the bottom edge sizes the list', listAfter < listBefore - 20, `${listBefore}→${listAfter}`);
 
   // The right edge makes the open timer wider; the text keeps its size.
   const before = await run(`return { w: document.getElementById('panel').offsetWidth, f: getComputedStyle(document.getElementById('hms')).fontSize }`);
